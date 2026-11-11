@@ -1,0 +1,127 @@
+# ==============================================================================
+# SIM BISOLPIN ACADEMY - APACHE CONFIGURATION & SECURITY HARDENING (.htaccess)
+# ==============================================================================
+
+# 1. DEFAULT ENTRYPOINT
+DirectoryIndex index.php
+
+# 2. DISABLE DIRECTORY BROWSING (Mencegah publik melihat isi folder)
+Options -Indexes
+
+# 3. SET DEFAULT CHARSET
+AddDefaultCharset UTF-8
+
+# ==============================================================================
+# 4. PROTEKSI FILE SENSITIF & TERSEMBUNYI
+# ==============================================================================
+# Blokir akses ke file konfigurasi, dotfiles (.env, .git), file SQL, dan backup
+<FilesMatch "(^\.|\.(sql|env|log|md|json|lock|bak|config|dist|sh|bat)$)">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# ==============================================================================
+# 5. PROTEKSI DIREKTORI INTERNAL (Hanya untuk include/require skrip PHP)
+# ==============================================================================
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Blokir akses langsung via browser ke folder internal
+    RewriteRule ^(config|core|database|includes|assets/sessions|scratch)(/.*)?$ - [F,L,NC]
+</IfModule>
+
+# ==============================================================================
+# 6. HTTP SECURITY HEADERS (Mencegah XSS, Clickjacking, MIME-sniffing)
+# ==============================================================================
+<IfModule mod_headers.c>
+    # Mencegah MIME Type Sniffing
+    Header always set X-Content-Type-Options "nosniff"
+
+    # Mencegah Clickjacking (iframe hanya diizinkan dari domain yang sama)
+    Header always set X-Frame-Options "SAMEORIGIN"
+
+    # XSS Protection
+    Header always set X-XSS-Protection "1; mode=block"
+
+    # Kebijakan Referrer
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# ==============================================================================
+# 7. OPTIMALISASI KOMPRESI GZIP / DEFLATE
+# ==============================================================================
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/plain
+    AddOutputFilterByType DEFLATE text/html
+    AddOutputFilterByType DEFLATE text/xml
+    AddOutputFilterByType DEFLATE text/css
+    AddOutputFilterByType DEFLATE text/javascript
+    AddOutputFilterByType DEFLATE application/xml
+    AddOutputFilterByType DEFLATE application/xhtml+xml
+    AddOutputFilterByType DEFLATE application/rss+xml
+    AddOutputFilterByType DEFLATE application/javascript
+    AddOutputFilterByType DEFLATE application/x-javascript
+    AddOutputFilterByType DEFLATE application/json
+    AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+# ==============================================================================
+# 8. BROWSER CACHING UNTUK ASSET STATIS
+# ==============================================================================
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresDefault "access plus 1 month"
+
+    # Asset Gambar & Ikon
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/webp "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 1 year"
+    ExpiresByType image/x-icon "access plus 1 year"
+
+    # CSS & JavaScript
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType text/javascript "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+
+    # Font
+    ExpiresByType font/ttf "access plus 1 year"
+    ExpiresByType font/woff "access plus 1 year"
+    ExpiresByType font/woff2 "access plus 1 year"
+</IfModule>
+
+# ==============================================================================
+# 9. KONFIGURASI BATAS UNGGAHAN PHP (Jika Server Mengizinkan php_value)
+# ==============================================================================
+<IfModule mod_php.c>
+    php_value upload_max_filesize 20M
+    php_value post_max_size 25M
+    php_value max_execution_time 300
+    php_value max_input_time 300
+    php_flag session.cookie_httponly on
+</IfModule>
+
+<IfModule mod_php7.c>
+    php_value upload_max_filesize 20M
+    php_value post_max_size 25M
+    php_value max_execution_time 300
+    php_value max_input_time 300
+    php_flag session.cookie_httponly on
+</IfModule>
+
+<IfModule mod_php8.c>
+    php_value upload_max_filesize 20M
+    php_value post_max_size 25M
+    php_value max_execution_time 300
+    php_value max_input_time 300
+    php_flag session.cookie_httponly on
+</IfModule>
+

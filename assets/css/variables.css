@@ -1,0 +1,65 @@
+/**
+ * SIM BISOLPIN ACADEMY - Design Tokens & Brand Variables
+ * Source Reference: https://www.bisolpin.com/
+ */
+
+:root {
+    /* Brand Primary Color (Teal Palette Bisolpin) */
+    --brand-primary: #1BA89C;
+    --brand-primary-hover: #159388;
+    --brand-primary-dark: #0d7a71;
+    --brand-primary-light: #e8f8f6;
+    --brand-primary-surface: #f0fbf9;
+
+    /* Secondary & Accent Colors */
+    --brand-secondary: #0EA5E9;
+    --brand-secondary-hover: #0284c7;
+    --brand-secondary-light: #e0f2fe;
+
+    --brand-accent: #F59E0B;
+    --brand-accent-hover: #d97706;
+    --brand-accent-light: #fef3c7;
+
+    /* Feedback Colors */
+    --color-success: #10B981;
+    --color-success-bg: #ecfdf5;
+    --color-warning: #F59E0B;
+    --color-warning-bg: #fffbeb;
+    --color-danger: #EF4444;
+    --color-danger-bg: #fef2f2;
+    --color-info: #3B82F6;
+    --color-info-bg: #eff6ff;
+
+    /* Neutrals & Surfaces */
+    --bg-app: #F8FAFC;
+    --bg-surface: #FFFFFF;
+    --bg-surface-alt: #F1F5F9;
+    --border-color: #E2E8F0;
+    --border-color-focus: #1BA89C;
+
+    /* Text Colors */
+    --text-main: #0F172A;
+    --text-muted: #64748B;
+    --text-light: #94A3B8;
+    --text-inverse: #FFFFFF;
+
+    /* Typography */
+    --font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+    /* Radii & Shadows */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 24px;
+    --radius-full: 9999px;
+
+    --shadow-soft: 0 2px 10px -2px rgba(15, 23, 42, 0.05), 0 1px 4px -1px rgba(15, 23, 42, 0.03);
+    --shadow-card: 0 4px 20px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
+    --shadow-hover: 0 12px 28px -4px rgba(27, 168, 156, 0.15), 0 4px 10px -2px rgba(15, 23, 42, 0.05);
+
+    /* Gradients */
+    --gradient-brand: linear-gradient(135deg, #1BA89C 0%, #0d7a71 100%);
+    --gradient-card-teal: linear-gradient(135deg, #1BA89C 0%, #14b8a6 100%);
+    --gradient-card-dark: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+}
+
