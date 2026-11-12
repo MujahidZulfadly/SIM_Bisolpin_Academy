@@ -158,7 +158,7 @@ if ($selectedJadwal) {
 
     // Ambil opsi modul BAK untuk program layanan ini
     $stmtModul = $db->prepare("
-        SELECT id, pertemuan_ke, kode_materi, judul_modul, deskripsi_materi, tipe_lampiran, external_url, file_modul
+        SELECT id, pertemuan_ke, kode_materi, judul_modul, ringkasan_materi as deskripsi_materi, tipe_lampiran, external_url, file_modul
         FROM tabel_materi 
         WHERE id_layanan = ? AND status_publikasi = 'published'
         ORDER BY pertemuan_ke ASC

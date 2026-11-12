@@ -28,8 +28,15 @@ require_once dirname(__DIR__) . '/core/flash.php';
 <!-- jQuery CDN -->
 <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
 
-<!-- DataTables JS CDN -->
+<!-- DataTables JS CDN & Responsive Extension -->
 <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
+<script>
+    // Matikan alert modal native browser yang mengganggu (alihkan ke silent mode)
+    if (window.jQuery && window.jQuery.fn && window.jQuery.fn.dataTable) {
+        window.jQuery.fn.dataTable.ext.errMode = 'none';
+    }
+</script>
 
 <!-- Chart.js CDN for Analytics & Progress Graphs -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -37,8 +44,8 @@ require_once dirname(__DIR__) . '/core/flash.php';
 <!-- SweetAlert2 JS CDN -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-<!-- Custom App JS -->
-<script src="<?= asset_url('js/app.js') ?>"></script>
+<!-- Custom App JS (dengan auto cache busting) -->
+<script src="<?= asset_url('js/app.js') ?>?v=<?= file_exists(dirname(__DIR__) . '/assets/js/app.js') ? filemtime(dirname(__DIR__) . '/assets/js/app.js') : time() ?>"></script>
 
 <!-- Otomatis Render Flash Notification jika ada di sesi -->
 <?= render_flash() ?>

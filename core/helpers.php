@@ -603,9 +603,261 @@ function get_ikm_badge(float|int|string|null $score): array
         'label' => 'Perlu Pembinaan',
         'badge' => 'bg-rose-50 text-rose-700 border-rose-200',
         'color' => 'rose',
-        'icon'  => 'fa-triangle-exclamation'
+        'icon'  => 'fa-triangle-exclamation',
+        'desc'  => 'Perlu supervisi dan pembinaan pedagogis'
     ];
 }
+
+/**
+ * Memastikan tabel_evaluasi_mentor ada di database (Auto-Migrate On-the-Fly)
+ * Mencegah fatal error SQLSTATE[42S02] jika pengguna belum import patch SQL manual
+ */
+function ensure_table_evaluasi_mentor_exists(?PDO $db = null): bool
+{
+    static $checked = false;
+    if ($checked) {
+        return true;
+    }
+
+    try {
+        $db = $db ?? get_db();
+        // Cek cepat apakah tabel sudah ada
+        $check = $db->query("SHOW TABLES LIKE 'tabel_evaluasi_mentor'")->fetch();
+        if ($check) {
+            $checked = true;
+            return true;
+        }
+
+        // Buat tabel jika belum ada
+        $db->exec("
+            CREATE TABLE IF NOT EXISTS `tabel_evaluasi_mentor` (
+              `id` INT AUTO_INCREMENT PRIMARY KEY,
+              `id_cabang` INT NOT NULL,
+              `id_siswa` INT NOT NULL,
+              `id_mentor` INT NOT NULL,
+              `id_layanan` INT NOT NULL,
+              `skor_materi` TINYINT NOT NULL CHECK (`skor_materi` BETWEEN 1 AND 5),
+              `skor_penyampaian` TINYINT NOT NULL CHECK (`skor_penyampaian` BETWEEN 1 AND 5),
+              `skor_kedisiplinan` TINYINT NOT NULL CHECK (`skor_kedisiplinan` BETWEEN 1 AND 5),
+              `skor_kesabaran` TINYINT NOT NULL CHECK (`skor_kesabaran` BETWEEN 1 AND 5),
+              `nilai_rata_rata` DECIMAL(3,2) NOT NULL,
+              `ulasan_saran` TEXT NULL,
+              `is_anonymous` TINYINT(1) DEFAULT 1,
+              `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              INDEX `idx_eval_cabang` (`id_cabang`),
+              INDEX `idx_eval_mentor` (`id_mentor`),
+              INDEX `idx_eval_siswa` (`id_siswa`),
+              UNIQUE KEY `unique_evaluasi` (`id_siswa`, `id_layanan`, `id_mentor`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+
+        // Seed data evaluasi awal contoh jika data mentor & siswa tersedia
+        try {
+            $mentor = $db->query("SELECT id, id_cabang FROM tabel_pegawai WHERE jabatan_role = 'mentor' LIMIT 1")->fetch();
+            $siswa  = $db->query("SELECT id, id_cabang, id_layanan FROM tabel_siswa LIMIT 1")->fetch();
+            if ($mentor && $siswa) {
+                $mentorId  = (int)$mentor['id'];
+                $branchId  = (int)($mentor['id_cabang'] ?? 1);
+                $siswaId   = (int)$siswa['id'];
+                $layananId = (int)($siswa['id_layanan'] ?? 5);
+
+                $stmtIns = $db->prepare("
+                    INSERT IGNORE INTO `tabel_evaluasi_mentor` (
+                        `id_cabang`, `id_siswa`, `id_mentor`, `id_layanan`,
+                        `skor_materi`, `skor_penyampaian`, `skor_kedisiplinan`, `skor_kesabaran`,
+                        `nilai_rata_rata`, `ulasan_saran`, `is_anonymous`, `created_at`
+                    ) VALUES (?, ?, ?, ?, 5, 5, 5, 5, 5.00, ?, 1, NOW() - INTERVAL 2 DAY)
+                ");
+                $stmtIns->execute([
+                    $branchId, $siswaId, $mentorId, $layananId,
+                    'Kak mentor membimbing dengan sangat sabar dan jelas. Penjelasan modul praktik langsung hands-on sangat membantu pemahaman saya!'
+                ]);
+            }
+        } catch (\Throwable $seedErr) {
+            // Abaikan jika seed gagal, tabel utama sudah dibuat
+        }
+
+        // Pastikan juga tabel_maintenance_log dan tabel_pembayaran ada
+        try {
+            $db->exec("
+                CREATE TABLE IF NOT EXISTS `tabel_maintenance_log` (
+                  `id` INT AUTO_INCREMENT PRIMARY KEY,
+                  `id_cabang` INT NOT NULL,
+                  `id_aset` INT NOT NULL,
+                  `tanggal_maintenance` DATE NOT NULL,
+                  `jenis_perbaikan` VARCHAR(150) NOT NULL,
+                  `biaya_perbaikan` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                  `teknisi_pelaksana` VARCHAR(150) NOT NULL,
+                  `kondisi_sebelum` ENUM('baik','perlu_perbaikan','rusak_berat') NOT NULL,
+                  `kondisi_setelah` ENUM('baik','perlu_perbaikan','rusak_berat') NOT NULL,
+                  `keterangan_tindakan` TEXT NOT NULL,
+                  `created_by` INT NOT NULL,
+                  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  INDEX `idx_maint_cabang` (`id_cabang`),
+                  INDEX `idx_maint_aset` (`id_aset`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+                CREATE TABLE IF NOT EXISTS `tabel_pembayaran` (
+                  `id` INT AUTO_INCREMENT PRIMARY KEY,
+                  `id_cabang` INT NOT NULL,
+                  `id_siswa` INT NOT NULL,
+                  `id_layanan` INT NOT NULL,
+                  `kode_transaksi` VARCHAR(50) NOT NULL UNIQUE,
+                  `tanggal_bayar` DATE NOT NULL,
+                  `jumlah_bayar` DECIMAL(12,2) NOT NULL,
+                  `metode_pembayaran` ENUM('tunai','transfer_bank','qris') NOT NULL DEFAULT 'tunai',
+                  `status_pembayaran` ENUM('lunas','cicilan','menunggu_konfirmasi') NOT NULL DEFAULT 'lunas',
+                  `bukti_transfer` VARCHAR(255) NULL,
+                  `catatan` TEXT NULL,
+                  `diterima_oleh` INT NOT NULL,
+                  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  INDEX `idx_bayar_cabang` (`id_cabang`),
+                  INDEX `idx_bayar_siswa` (`id_siswa`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            ");
+        } catch (\Throwable $suppErr) {
+            // Abaikan
+        }
+
+        $checked = true;
+        return true;
+    } catch (\Throwable $e) {
+        error_log("Gagal auto-migrate tabel_evaluasi_mentor: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * SIM BISOLPIN ACADEMY - Schema Auto-Migration & Column Integrity Helper
+ * Memastikan semua tabel dan kolom versi terbaru otomatis tersedia di MySQL tanpa perlu import manual.
+ */
+function ensure_database_schema_integrity(?PDO $db = null): bool
+{
+    static $checked = false;
+    if ($checked) {
+        return true;
+    }
+
+    try {
+        $db = $db ?? get_db();
+
+        // 1. Pastikan kolom-kolom baru di tabel_siswa
+        $siswaCols = $db->query("SHOW COLUMNS FROM `tabel_siswa`")->fetchAll(PDO::FETCH_COLUMN);
+        $siswaColMap = array_flip($siswaCols);
+
+        $newSiswaCols = [
+            'umur' => "INT NULL DEFAULT NULL AFTER `nama_lengkap`",
+            'jenjang' => "ENUM('TK','SD','SMP','SMA','SMK','Mahasiswa','Umum') NULL DEFAULT 'SD' AFTER `umur`",
+            'kelas' => "VARCHAR(50) NULL DEFAULT NULL AFTER `jenjang`",
+            'nama_sekolah' => "VARCHAR(150) NULL DEFAULT NULL AFTER `kelas`",
+            'asal_sekolah_instansi' => "VARCHAR(150) NULL DEFAULT NULL AFTER `nama_sekolah`",
+            'provinsi' => "VARCHAR(100) NULL DEFAULT 'Sulawesi Selatan' AFTER `alamat`",
+            'kabupaten_kota' => "VARCHAR(100) NULL DEFAULT 'Kota Makassar' AFTER `provinsi`",
+            'kecamatan' => "VARCHAR(100) NULL DEFAULT 'Panakkukang' AFTER `kabupaten_kota`",
+            'no_wa_ortu' => "VARCHAR(30) NULL DEFAULT NULL AFTER `no_hp_orang_tua`",
+            'skor_tka' => "DECIMAL(5,2) NULL DEFAULT NULL AFTER `catatan_progres_mentor`",
+            'detail_tka' => "VARCHAR(255) NULL DEFAULT NULL AFTER `skor_tka`",
+        ];
+
+        foreach ($newSiswaCols as $col => $def) {
+            if (!isset($siswaColMap[$col])) {
+                try {
+                    $db->exec("ALTER TABLE `tabel_siswa` ADD COLUMN `{$col}` {$def}");
+                    $siswaColMap[$col] = true;
+                } catch (\Throwable $e) {
+                    error_log("Gagal add column {$col} on tabel_siswa: " . $e->getMessage());
+                }
+            }
+        }
+
+        // 2. Pastikan kolom di tabel_materi
+        $materiCols = $db->query("SHOW COLUMNS FROM `tabel_materi`")->fetchAll(PDO::FETCH_COLUMN);
+        $materiColMap = array_flip($materiCols);
+
+        $newMateriCols = [
+            'ringkasan_materi' => "TEXT NULL AFTER `judul_modul`",
+            'tipe_lampiran' => "ENUM('file','link') NOT NULL DEFAULT 'file' AFTER `file_modul`",
+            'external_url' => "VARCHAR(500) NULL AFTER `tipe_lampiran`",
+            'panduan_mentor' => "TEXT NULL AFTER `external_url`",
+            'standar_tugas_produk' => "TEXT NULL AFTER `panduan_mentor`",
+        ];
+
+        foreach ($newMateriCols as $col => $def) {
+            if (!isset($materiColMap[$col])) {
+                try {
+                    $db->exec("ALTER TABLE `tabel_materi` ADD COLUMN `{$col}` {$def}");
+                    $materiColMap[$col] = true;
+                } catch (\Throwable $e) {
+                    error_log("Gagal add column {$col} on tabel_materi: " . $e->getMessage());
+                }
+            }
+        }
+
+        // 3. Pastikan kolom di tabel_pegawai
+        $pegawaiCols = $db->query("SHOW COLUMNS FROM `tabel_pegawai`")->fetchAll(PDO::FETCH_COLUMN);
+        $pegawaiColMap = array_flip($pegawaiCols);
+
+        $newPegawaiCols = [
+            'spesialisasi_mapel' => "ENUM('Matematika','Bahasa Inggris','Calistung','Coding','Pemrograman Web') NULL DEFAULT 'Coding' AFTER `spesialisasi_mentor`",
+            'pengalaman_mengajar' => "TEXT NULL DEFAULT NULL AFTER `alamat`",
+            'berkas_cv' => "VARCHAR(255) NULL DEFAULT NULL AFTER `pengalaman_mengajar`",
+        ];
+
+        foreach ($newPegawaiCols as $col => $def) {
+            if (!isset($pegawaiColMap[$col])) {
+                try {
+                    $db->exec("ALTER TABLE `tabel_pegawai` ADD COLUMN `{$col}` {$def}");
+                    $pegawaiColMap[$col] = true;
+                } catch (\Throwable $e) {
+                    error_log("Gagal add column {$col} on tabel_pegawai: " . $e->getMessage());
+                }
+            }
+        }
+
+        // 4. Pastikan kolom di tabel_produk
+        $produkCols = $db->query("SHOW COLUMNS FROM `tabel_produk`")->fetchAll(PDO::FETCH_COLUMN);
+        $produkColMap = array_flip($produkCols);
+
+        $newProdukCols = [
+            'tipe_lampiran' => "ENUM('file','link') NOT NULL DEFAULT 'file' AFTER `file_atau_url_karya`",
+            'external_url' => "VARCHAR(500) NULL AFTER `tipe_lampiran`",
+            'nilai_karya' => "DECIMAL(5,2) NULL DEFAULT NULL AFTER `deskripsi_karya`",
+            'review_mentor' => "TEXT NULL AFTER `nilai_karya`",
+            'id_mentor_validator' => "INT NULL AFTER `review_mentor`",
+        ];
+
+        foreach ($newProdukCols as $col => $def) {
+            if (!isset($produkColMap[$col])) {
+                try {
+                    $db->exec("ALTER TABLE `tabel_produk` ADD COLUMN `{$col}` {$def}");
+                    $produkColMap[$col] = true;
+                } catch (\Throwable $e) {
+                    error_log("Gagal add column {$col} on tabel_produk: " . $e->getMessage());
+                }
+            }
+        }
+
+        // 5. Pastikan kolom di tabel_layanan
+        $layananCols = $db->query("SHOW COLUMNS FROM `tabel_layanan`")->fetchAll(PDO::FETCH_COLUMN);
+        $layananColMap = array_flip($layananCols);
+
+        if (!isset($layananColMap['deskripsi'])) {
+            try {
+                $db->exec("ALTER TABLE `tabel_layanan` ADD COLUMN `deskripsi` TEXT NULL AFTER `kategori_jenjang`");
+            } catch (\Throwable $e) {}
+        }
+
+        // 6. Pastikan tabel-tabel pendukung ada
+        ensure_table_evaluasi_mentor_exists($db);
+
+        $checked = true;
+        return true;
+    } catch (\Throwable $e) {
+        error_log("Schema integrity check failed: " . $e->getMessage());
+        return false;
+    }
+}
+
 
 
 

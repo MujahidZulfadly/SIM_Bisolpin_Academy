@@ -80,48 +80,55 @@ foreach ($cabangList as $c) {
 }
 
 // Ambil perbandingan IKM dan evaluasi mutu antar-cabang
-$stmtIkmCabang = $db->query("
-    SELECT 
-        c.id as cabang_id,
-        c.kode_cabang,
-        c.nama_cabang,
-        c.kota,
-        c.provinsi,
-        c.status_mitra,
-        COUNT(e.id) as total_evaluasi,
-        COALESCE(AVG(e.nilai_rata_rata), 0) as avg_ikm,
-        COALESCE(AVG(e.skor_materi), 0) as avg_materi,
-        COALESCE(AVG(e.skor_penyampaian), 0) as avg_penyampaian,
-        COALESCE(AVG(e.skor_kedisiplinan), 0) as avg_kedisiplinan,
-        COALESCE(AVG(e.skor_kesabaran), 0) as avg_kesabaran,
-        SUM(CASE WHEN e.nilai_rata_rata < 3.50 THEN 1 ELSE 0 END) as total_komplain
-    FROM tabel_cabang c
-    LEFT JOIN tabel_evaluasi_mentor e ON e.id_cabang = c.id
-    WHERE c.status_mitra = 'aktif'
-    GROUP BY c.id, c.kode_cabang, c.nama_cabang, c.kota, c.provinsi, c.status_mitra
-    ORDER BY avg_ikm DESC, total_evaluasi DESC, c.nama_cabang ASC
-");
-$ikmCabangList = $stmtIkmCabang->fetchAll();
-
-// Mentor terbaik di setiap cabang
-$stmtTopMentor = $db->query("
-    SELECT 
-        e.id_cabang,
-        p.nama_lengkap as nama_top_mentor,
-        p.spesialisasi_mentor,
-        AVG(e.nilai_rata_rata) as top_rating,
-        COUNT(e.id) as total_ulasan
-    FROM tabel_evaluasi_mentor e
-    JOIN tabel_pegawai p ON p.id = e.id_mentor
-    GROUP BY e.id_cabang, e.id_mentor, p.nama_lengkap, p.spesialisasi_mentor
-    ORDER BY e.id_cabang, top_rating DESC, total_ulasan DESC
-");
+ensure_table_evaluasi_mentor_exists($db);
+$ikmCabangList = [];
 $topMentorMap = [];
-foreach ($stmtTopMentor->fetchAll() as $tm) {
-    $cid = (int)$tm['id_cabang'];
-    if (!isset($topMentorMap[$cid])) {
-        $topMentorMap[$cid] = $tm;
+
+try {
+    $stmtIkmCabang = $db->query("
+        SELECT 
+            c.id as cabang_id,
+            c.kode_cabang,
+            c.nama_cabang,
+            c.kota,
+            c.provinsi,
+            c.status_mitra,
+            COUNT(e.id) as total_evaluasi,
+            COALESCE(AVG(e.nilai_rata_rata), 0) as avg_ikm,
+            COALESCE(AVG(e.skor_materi), 0) as avg_materi,
+            COALESCE(AVG(e.skor_penyampaian), 0) as avg_penyampaian,
+            COALESCE(AVG(e.skor_kedisiplinan), 0) as avg_kedisiplinan,
+            COALESCE(AVG(e.skor_kesabaran), 0) as avg_kesabaran,
+            SUM(CASE WHEN e.nilai_rata_rata < 3.50 THEN 1 ELSE 0 END) as total_komplain
+        FROM tabel_cabang c
+        LEFT JOIN tabel_evaluasi_mentor e ON e.id_cabang = c.id
+        WHERE c.status_mitra = 'aktif'
+        GROUP BY c.id, c.kode_cabang, c.nama_cabang, c.kota, c.provinsi, c.status_mitra
+        ORDER BY avg_ikm DESC, total_evaluasi DESC, c.nama_cabang ASC
+    ");
+    $ikmCabangList = $stmtIkmCabang->fetchAll();
+
+    // Mentor terbaik di setiap cabang
+    $stmtTopMentor = $db->query("
+        SELECT 
+            e.id_cabang,
+            p.nama_lengkap as nama_top_mentor,
+            p.spesialisasi_mentor,
+            AVG(e.nilai_rata_rata) as top_rating,
+            COUNT(e.id) as total_ulasan
+        FROM tabel_evaluasi_mentor e
+        JOIN tabel_pegawai p ON p.id = e.id_mentor
+        GROUP BY e.id_cabang, e.id_mentor, p.nama_lengkap, p.spesialisasi_mentor
+        ORDER BY e.id_cabang, top_rating DESC, total_ulasan DESC
+    ");
+    foreach ($stmtTopMentor->fetchAll() as $tm) {
+        $cid = (int)$tm['id_cabang'];
+        if (!isset($topMentorMap[$cid])) {
+            $topMentorMap[$cid] = $tm;
+        }
     }
+} catch (\Throwable $e) {
+    error_log("Error query IKM di monitoring_cabang.php: " . $e->getMessage());
 }
 
 require_once dirname(__DIR__, 2) . '/includes/header.php';

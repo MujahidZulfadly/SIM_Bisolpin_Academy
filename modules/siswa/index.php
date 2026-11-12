@@ -95,16 +95,21 @@ $needsMentorEvaluation = false;
 $existingEvaluation = null;
 
 if ($mentorId > 0) {
-    $stmtCekEval = $db->prepare("
-        SELECT id, nilai_rata_rata, created_at 
-        FROM tabel_evaluasi_mentor 
-        WHERE id_siswa = ? AND id_mentor = ? AND id_layanan = ?
-    ");
-    $stmtCekEval->execute([$siswaId, $mentorId, $layananId]);
-    $existingEvaluation = $stmtCekEval->fetch();
+    ensure_table_evaluasi_mentor_exists($db);
+    try {
+        $stmtCekEval = $db->prepare("
+            SELECT id, nilai_rata_rata, created_at 
+            FROM tabel_evaluasi_mentor 
+            WHERE id_siswa = ? AND id_mentor = ? AND id_layanan = ?
+        ");
+        $stmtCekEval->execute([$siswaId, $mentorId, $layananId]);
+        $existingEvaluation = $stmtCekEval->fetch();
 
-    if (!$existingEvaluation && (float)$siswa['persentase_progres'] >= 80.0) {
-        $needsMentorEvaluation = true;
+        if (!$existingEvaluation && (float)$siswa['persentase_progres'] >= 80.0) {
+            $needsMentorEvaluation = true;
+        }
+    } catch (\Throwable $e) {
+        error_log("Error cek status evaluasi siswa/index.php: " . $e->getMessage());
     }
 }
 
@@ -263,7 +268,7 @@ require_once dirname(__DIR__, 2) . '/includes/topbar.php';
                 </p>
             </div>
 
-            <?php if ($siswa['skor_tka'] !== null): ?>
+            <?php if (!empty($siswa['skor_tka'])): ?>
             <!-- Rapor Simulasi TKA & Try Out -->
             <div class="p-3.5 rounded-xl bg-purple-50 border border-purple-200 mb-4">
                 <div class="flex items-center justify-between">

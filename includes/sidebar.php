@@ -26,12 +26,10 @@ $isActive = function(string $keyword) use ($activeScript): string {
     <!-- Top Branding -->
     <div>
         <div class="p-6 border-b border-slate-100 flex items-center justify-between">
-            <a href="<?= base_url('index.php') ?>" class="flex items-center gap-3 text-decoration-none">
-                <div class="w-10 h-10 rounded-xl bg-gradient-brand flex items-center justify-center text-white shadow-md shadow-brand-500/20">
-                    <i class="fa-solid fa-graduation-cap text-lg"></i>
-                </div>
+            <a href="<?= base_url('index.php') ?>" class="flex items-center gap-3 text-decoration-none group">
+                <img src="<?= asset_url('img/logo.png') ?>" alt="Logo Bisolpin Academy" class="w-12 h-12 object-contain transition-transform group-hover:scale-105">
                 <div>
-                    <span class="font-extrabold text-xl tracking-tight text-slate-800">BISOLPIN</span>
+                    <span class="font-extrabold text-xl tracking-tight text-slate-800 block leading-tight">BISOLPIN</span>
                     <span class="block text-[10px] font-bold tracking-widest uppercase text-brand-600">Academy SIM</span>
                 </div>
             </a>
@@ -63,14 +61,10 @@ $isActive = function(string $keyword) use ($activeScript): string {
                     <span>Monitoring Cabang</span>
                 </a>
 
-                <div class="nav-section-title">KEMITRAAN & LAYANAN</div>
+                <div class="nav-section-title">KEMITRAAN CABANG</div>
                 <a href="<?= base_url('modules/pimpinan/verifikasi_mitra.php') ?>" class="nav-item-link <?= $isActive('verifikasi_mitra') ?>">
                     <i class="fa-solid fa-handshake-angle w-5 text-center"></i>
                     <span>Verifikasi Mitra Cabang</span>
-                </a>
-                <a href="<?= base_url('modules/pimpinan/layanan_pusat.php') ?>" class="nav-item-link <?= $isActive('layanan_pusat') ?>">
-                    <i class="fa-solid fa-layer-group w-5 text-center"></i>
-                    <span>Layanan Kursus Pusat</span>
                 </a>
 
                 <div class="nav-section-title">AUDIT NASIONAL</div>
@@ -117,14 +111,10 @@ $isActive = function(string $keyword) use ($activeScript): string {
                     <span>Galeri Karya Siswa</span>
                 </a>
 
-                <div class="nav-section-title">REKAP & LAPORAN</div>
+                <div class="nav-section-title">REKAP & LAPORAN CABANG</div>
                 <a href="<?= base_url('modules/direktur_cabang/laporan.php') ?>" class="nav-item-link <?= $isActive('/direktur_cabang/laporan') ?>">
                     <i class="fa-solid fa-print w-5 text-center"></i>
                     <span>Cetak Laporan Cabang</span>
-                </a>
-                <a href="<?= base_url('modules/absensi/riwayat_saya.php') ?>" class="nav-item-link <?= $isActive('riwayat_saya') ?>">
-                    <i class="fa-solid fa-user-clock w-5 text-center"></i>
-                    <span>Presensi Ceklok Saya</span>
                 </a>
 
             <?php elseif ($currentRole === ROLE_BAK): ?>
@@ -138,7 +128,7 @@ $isActive = function(string $keyword) use ($activeScript): string {
                 <div class="nav-section-title">STANDARISASI AKADEMIK</div>
                 <a href="<?= base_url('modules/bak/layanan.php') ?>" class="nav-item-link <?= $isActive('/bak/layanan') ?>">
                     <i class="fa-solid fa-layer-group w-5 text-center"></i>
-                    <span>Program & Paket Kursus</span>
+                    <span>Layanan Kursus Pusat</span>
                 </a>
                 <a href="<?= base_url('modules/bak/materi.php') ?>" class="nav-item-link <?= $isActive('/bak/materi') ?>">
                     <i class="fa-solid fa-file-pdf w-5 text-center"></i>
@@ -147,12 +137,6 @@ $isActive = function(string $keyword) use ($activeScript): string {
                 <a href="<?= base_url('modules/bak/standar_produk.php') ?>" class="nav-item-link <?= $isActive('standar_produk') ?>">
                     <i class="fa-solid fa-award w-5 text-center"></i>
                     <span>Standar Capaian Produk</span>
-                </a>
-
-                <div class="nav-section-title">KINERJA SAYA</div>
-                <a href="<?= base_url('modules/absensi/riwayat_saya.php') ?>" class="nav-item-link <?= $isActive('riwayat_saya') ?>">
-                    <i class="fa-solid fa-user-clock w-5 text-center"></i>
-                    <span>Presensi Ceklok Saya</span>
                 </a>
 
             <?php elseif ($currentRole === ROLE_MENTOR): ?>
@@ -219,6 +203,10 @@ $isActive = function(string $keyword) use ($activeScript): string {
                 <a href="<?= base_url('modules/staff/pembayaran.php') ?>" class="nav-item-link <?= $isActive('pembayaran') ?>">
                     <i class="fa-solid fa-cash-register w-5 text-center"></i>
                     <span>Kasir & SPP Layanan</span>
+                </a>
+                <a href="<?= base_url('modules/staff/rekap_absensi.php') ?>" class="nav-item-link <?= $isActive('rekap_absensi') ?>">
+                    <i class="fa-solid fa-clipboard-user w-5 text-center"></i>
+                    <span>Rekap Presensi SDM</span>
                 </a>
 
                 <div class="nav-section-title">KINERJA SAYA</div>

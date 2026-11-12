@@ -18,7 +18,7 @@ require_once dirname(__DIR__, 2) . '/core/attendance_ceklok.php';
 
 // Pastikan user adalah pegawai yang berhak melakukan presensi
 if (!is_eligible_for_ceklok()) {
-    redirect_with_message('index.php', 'error', 'Halaman ini khusus untuk personil pegawai & pengajar.', 'Akses Ditolak');
+    redirect_with_message('index.php', 'error', 'Presensi ceklok mandiri hanya berlaku bagi Staff Administrasi, Mentor Pengajar, dan Sarpras.', 'Akses Ditolak');
 }
 
 // Proses Ceklok jika ada submit di halaman ini

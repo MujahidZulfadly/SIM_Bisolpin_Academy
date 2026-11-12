@@ -20,6 +20,7 @@ require_once dirname(__DIR__, 2) . '/core/flash.php';
 check_role(ROLE_STAFF);
 
 $db = get_db();
+ensure_database_schema_integrity($db);
 $branchId = auth_branch_id() ?? get_active_branch_id() ?? 1;
 
 // Keamanan isolasi tenant multi-cabang
@@ -1117,10 +1118,8 @@ require_once dirname(__DIR__, 2) . '/includes/topbar.php';
             <div class="absolute -right-10 -bottom-10 w-44 h-44 rounded-full bg-teal-500/10 blur-xl pointer-events-none"></div>
 
             <div class="flex items-center justify-between pb-3 border-b border-white/20">
-                <div class="flex items-center gap-2">
-                    <div class="w-8 h-8 rounded-lg bg-white/20 backdrop-blur flex items-center justify-center font-black text-white text-base">
-                        B
-                    </div>
+                <div class="flex items-center gap-2.5">
+                    <img src="<?= asset_url('img/logo.png') ?>" alt="Logo Bisolpin Academy" class="w-9 h-9 object-contain">
                     <div>
                         <h4 class="text-xs font-black tracking-wider uppercase">BISOLPIN ACADEMY</h4>
                         <p class="text-[9px] text-teal-200">STUDENT IDENTIFICATION CARD</p>

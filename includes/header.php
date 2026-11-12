@@ -22,6 +22,10 @@ $user = auth_user();
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= e($pageTitle) ?> | <?= APP_NAME ?></title>
 
+    <!-- Favicon Resmi Bisolpin Academy -->
+    <link rel="icon" type="image/png" href="<?= asset_url('img/logo.png') ?>">
+    <link rel="apple-touch-icon" href="<?= asset_url('img/logo.png') ?>">
+
     <!-- Google Fonts: Plus Jakarta Sans -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -58,8 +62,9 @@ $user = auth_user();
         }
     </script>
 
-    <!-- DataTables CSS CDN -->
+    <!-- DataTables CSS CDN & Responsive Extension -->
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.dataTables.min.css">
     
     <!-- SweetAlert2 CSS CDN -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">

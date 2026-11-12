@@ -605,9 +605,7 @@ require_once dirname(__DIR__, 2) . '/includes/topbar.php';
             <!-- Kop Surat Kwitansi -->
             <div class="flex items-center justify-between pb-3 border-b-2 border-slate-800">
                 <div class="flex items-center gap-2.5">
-                    <div class="w-9 h-9 rounded-lg bg-teal-600 text-white font-black flex items-center justify-center text-lg">
-                        B
-                    </div>
+                    <img src="<?= asset_url('img/logo.png') ?>" alt="Logo Bisolpin Academy" class="w-10 h-10 object-contain">
                     <div>
                         <h4 class="text-xs font-black tracking-wider uppercase">BISOLPIN ACADEMY</h4>
                         <p class="text-[10px] text-slate-500">KURSUS & BIMBINGAN BELAJAR TATAP MUKA</p>

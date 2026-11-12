@@ -19,10 +19,7 @@ require_once dirname(__DIR__, 2) . '/core/attendance_ceklok.php';
 // Proteksi hak akses Direktur Cabang
 check_role(ROLE_DIREKTUR_CABANG);
 
-// Tangani aksi Ceklok Mandiri jika ada
-handle_attendance_post_action();
-
-$branchId = auth_branch_id();
+$branchId = auth_branch_id() ?? get_active_branch_id() ?? 1;
 if (!$branchId) {
     die("Akses Ditolak: Akun Anda tidak terafiliasi dengan cabang resmi manapun.");
 }
@@ -163,8 +160,7 @@ require_once dirname(__DIR__, 2) . '/includes/topbar.php';
     </div>
 </div>
 
-<!-- Widget Ceklok Presensi Mandiri Direktur Cabang -->
-<?php render_attendance_widget(); ?>
+
 
 <?php if ($totalPegawai === 0 || $countAset === 0 || $totalSiswa === 0): ?>
     <!-- ========================================================================= -->

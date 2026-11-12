@@ -18,6 +18,15 @@ check_role(ROLE_MENTOR);
 
 $db = get_db();
 
+// Auto-migrate: pastikan kolom skor_tka dan detail_tka ada pada tabel_siswa
+try {
+    $db->query("SELECT skor_tka, detail_tka FROM tabel_siswa LIMIT 1");
+} catch (\Throwable $e) {
+    try {
+        $db->exec("ALTER TABLE tabel_siswa ADD COLUMN `skor_tka` DECIMAL(5,2) NULL DEFAULT NULL AFTER `catatan_progres_mentor`, ADD COLUMN `detail_tka` VARCHAR(255) NULL DEFAULT NULL AFTER `skor_tka`");
+    } catch (\Throwable $ex) {}
+}
+
 // Ambil profil data mentor
 $stmtPegawai = $db->prepare("SELECT id, nama_lengkap, id_cabang FROM tabel_pegawai WHERE user_id = ?");
 $stmtPegawai->execute([auth_id()]);
@@ -159,7 +168,7 @@ require_once dirname(__DIR__, 2) . '/includes/topbar.php';
                         <td>
                             <strong class="text-brand-700 text-xs block"><?= e($row['nama_layanan']) ?></strong>
                             <span class="text-[10px] text-slate-400 font-mono"><?= e($row['kode_layanan']) ?></span>
-                            <?php if ($row['skor_tka'] !== null): ?>
+                            <?php if (!empty($row['skor_tka'])): ?>
                                 <div class="mt-1">
                                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200" title="<?= e($row['detail_tka'] ?? '') ?>">
                                         <i class="fa-solid fa-trophy mr-1 text-amber-500"></i> Skor TKA: <?= number_format((float)$row['skor_tka'], 1) ?>

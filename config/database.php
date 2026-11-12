@@ -95,6 +95,10 @@ class Database
  */
 function get_db(): PDO
 {
-    return Database::getInstance()->getConnection();
+    $pdo = Database::getInstance()->getConnection();
+    if (function_exists('ensure_database_schema_integrity')) {
+        ensure_database_schema_integrity($pdo);
+    }
+    return $pdo;
 }
 

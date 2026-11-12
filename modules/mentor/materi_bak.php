@@ -18,7 +18,7 @@ check_role(ROLE_MENTOR);
 $db = get_db();
 
 // Ambil seluruh program layanan aktif untuk selector
-$layananList = $db->query("SELECT id, kode_layanan, nama_layanan, jumlah_pertemuan, kategori_jenjang FROM tabel_layanan WHERE status_aktif = 'aktif' ORDER BY nama_layanan ASC")->fetchAll();
+$layananList = $db->query("SELECT id, kode_layanan, nama_layanan, jumlah_pertemuan, kategori_jenjang, deskripsi FROM tabel_layanan WHERE status_aktif = 'aktif' ORDER BY nama_layanan ASC")->fetchAll();
 
 $selectedLayananId = isset($_GET['layanan_id']) && $_GET['layanan_id'] !== '' 
     ? (int)$_GET['layanan_id'] 
@@ -87,7 +87,7 @@ require_once dirname(__DIR__, 2) . '/includes/topbar.php';
                 </span>
                 <h2 class="text-2xl font-extrabold"><?= e($selectedLayanan['nama_layanan']) ?></h2>
                 <p class="text-xs text-teal-100 mt-1 max-w-2xl">
-                    <?= e($selectedLayanan['deskripsi'] ?: 'Program kursus tatap muka berstandar BAK dengan modul berjenjang.') ?>
+                    <?= e(!empty($selectedLayanan['deskripsi']) ? $selectedLayanan['deskripsi'] : 'Program kursus tatap muka berstandar BAK dengan modul berjenjang.') ?>
                 </p>
             </div>
             <div class="flex items-center gap-3 shrink-0">

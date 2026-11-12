@@ -180,6 +180,7 @@ $sqlCeklok = "
     LEFT JOIN tabel_cabang c ON c.id = a.id_cabang
     LEFT JOIN users u ON u.id = a.diinput_oleh
     WHERE a.tipe_absensi = 'pegawai_mentor'
+      AND p.jabatan_role IN ('staff', 'mentor', 'sarpras')
       AND a.tanggal_absensi = ?
 ";
 $paramsCeklok = [$filterTanggalAbsen];
@@ -233,7 +234,7 @@ require_once dirname(__DIR__, 2) . '/includes/topbar.php';
     </button>
     <button type="button" id="btnTabCeklokNasional" onclick="switchPimpinanTab('ceklok')" class="px-5 py-3 border-b-2 font-bold text-xs transition-all border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-2">
         <i class="fa-solid fa-clock-rotate-left"></i>
-        <span>Monitoring Ceklok Nasional & Direktur Cabang</span>
+        <span>Monitoring Presensi Pegawai & Mentor Nasional</span>
         <span class="px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 text-[10px] font-bold"><?= count($ceklokNasionalList) ?></span>
     </button>
 </div>
@@ -386,7 +387,7 @@ require_once dirname(__DIR__, 2) . '/includes/topbar.php';
             <?= render_empty_state(
                 'fa-clock-rotate-left',
                 'Belum Ada Presensi Ceklok pada Tanggal Ini',
-                'Belum ada personil atau pimpinan cabang yang melakukan Clock-In presensi kerja pada tanggal ' . format_tanggal_indonesia($filterTanggalAbsen) . '.',
+                'Belum ada staf operasional atau mentor yang melakukan presensi kerja pada tanggal ' . format_tanggal_indonesia($filterTanggalAbsen) . '.',
                 null,
                 0
             ) ?>
@@ -597,6 +598,11 @@ window.addEventListener('DOMContentLoaded', function() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('tab') === 'ceklok' || params.get('tanggal_absen')) {
         switchPimpinanTab('ceklok');
+        setTimeout(function() {
+            if (typeof $ !== 'undefined' && $.fn.DataTable) {
+                $(document).trigger('click');
+            }
+        }, 150);
     }
 });
 </script>

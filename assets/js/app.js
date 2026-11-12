@@ -27,52 +27,78 @@ document.addEventListener('DOMContentLoaded', function () {
     // 2. Auto-initialize DataTables if class .datatable is present and jQuery is loaded
     if (typeof $ !== 'undefined' && $.fn.DataTable) {
         // Prevent intrusive native browser alert modals for DataTables warnings; log to console instead
-        $.fn.dataTable.ext.errMode = 'console';
+        $.fn.dataTable.ext.errMode = 'none';
 
-        $('.datatable').each(function () {
-            const $tbl = $(this);
+        function safeInitDataTables() {
+            $('.datatable').each(function () {
+                const $tbl = $(this);
 
-            // Skip initialization if table has no tbody rows or contains an empty-state colspan row
-            if ($tbl.find('tbody tr').length === 0 || $tbl.find('tbody tr:first td[colspan]').length > 0) {
-                return;
-            }
+                // Already initialized
+                if ($.fn.DataTable.isDataTable(this)) {
+                    return;
+                }
 
-            // Prevent duplicate initialization
-            if ($.fn.DataTable.isDataTable(this)) {
-                return;
-            }
+                // If table is inside hidden tab / hidden container, skip until made visible
+                if ($tbl.is(':hidden') || $tbl.closest('.hidden').length > 0) {
+                    return;
+                }
 
-            $tbl.DataTable({
-                language: {
-                    search: "Cari Data:",
-                    lengthMenu: "Tampilkan _MENU_ baris",
-                    info: "Menampilkan _START_ s/d _END_ dari _TOTAL_ data",
-                    infoEmpty: "Data tidak tersedia",
-                    infoFiltered: "(disaring dari _MAX_ total data)",
-                    zeroRecords: "Tidak ada data yang cocok dengan pencarian",
-                    paginate: {
-                        first: "Awal",
-                        last: "Akhir",
-                        next: "Lanjut →",
-                        previous: "← Kembali"
-                    }
-                },
-                responsive: true,
-                pageLength: 10
+                // Skip if no body rows or contains an empty-state colspan row
+                const $bodyRows = $tbl.find('tbody tr');
+                if ($bodyRows.length === 0 || $tbl.find('tbody td[colspan]').length > 0) {
+                    return;
+                }
+
+                // Pre-check: Ensure thead th count matches tbody first tr td count to prevent tn/18
+                const thCount = $tbl.find('thead tr:first th').length;
+                const tdCount = $bodyRows.first().find('td').length;
+                if (thCount > 0 && tdCount > 0 && thCount !== tdCount) {
+                    return;
+                }
+
+                const hasResponsive = typeof $.fn.dataTable.Responsive !== 'undefined';
+
+                $tbl.DataTable({
+                    language: {
+                        search: "Cari Data:",
+                        lengthMenu: "Tampilkan _MENU_ baris",
+                        info: "Menampilkan _START_ s/d _END_ dari _TOTAL_ data",
+                        infoEmpty: "Data tidak tersedia",
+                        infoFiltered: "(disaring dari _MAX_ total data)",
+                        zeroRecords: "Tidak ada data yang cocok dengan pencarian",
+                        paginate: {
+                            first: "Awal",
+                            last: "Akhir",
+                            next: "Lanjut →",
+                            previous: "← Kembali"
+                        }
+                    },
+                    responsive: hasResponsive,
+                    autoWidth: false,
+                    pageLength: 10
+                });
             });
-        });
+        }
 
-        // Recalculate column widths when tabs change
-        $('button[onclick*="switch"], a[data-tab]').on('click', function () {
+        // Initialize on visible tables at startup
+        safeInitDataTables();
+
+        // Recalculate column widths and initialize newly revealed tables when tabs change
+        $(document).on('click', 'button[onclick*="switch"], a[data-tab], [data-tab-target]', function () {
             setTimeout(function () {
+                safeInitDataTables();
                 if ($.fn.DataTable.isDataTable) {
                     $('.datatable').each(function () {
-                        if ($.fn.DataTable.isDataTable(this)) {
-                            $(this).DataTable().columns.adjust().responsive.recalc();
+                        if ($.fn.DataTable.isDataTable(this) && $(this).is(':visible')) {
+                            const dt = $(this).DataTable();
+                            dt.columns.adjust();
+                            if (dt.responsive && typeof dt.responsive.recalc === 'function') {
+                                dt.responsive.recalc();
+                            }
                         }
                     });
                 }
-            }, 100);
+            }, 120);
         });
     }
 

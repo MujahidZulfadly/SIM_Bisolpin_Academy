@@ -118,6 +118,11 @@ function login_user(array $userData): void
         'logged_in_at'   => time(),
     ];
 
+    // Alias kompatibilitas
+    $_SESSION['user_id']   = (int)$userData['id'];
+    $_SESSION['role']      = $userData['role'];
+    $_SESSION['id_cabang'] = !empty($userData['id_cabang']) ? (int)$userData['id_cabang'] : null;
+
     // Reset filter cabang sesi jika Pimpinan/BAK
     unset($_SESSION['filter_branch_id']);
 }

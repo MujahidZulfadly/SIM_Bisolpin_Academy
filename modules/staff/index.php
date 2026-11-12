@@ -146,6 +146,10 @@ require_once dirname(__DIR__, 2) . '/includes/topbar.php';
             <i class="fa-solid fa-cash-register text-xs"></i>
             <span>Kasir / SPP</span>
         </a>
+        <a href="<?= base_url('modules/staff/rekap_absensi.php') ?>" class="btn-brand-outline text-xs py-2 px-4">
+            <i class="fa-solid fa-clipboard-user text-xs"></i>
+            <span>Rekap Presensi SDM</span>
+        </a>
     </div>
 </div>
 

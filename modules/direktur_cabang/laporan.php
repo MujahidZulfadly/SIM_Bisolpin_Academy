@@ -121,9 +121,7 @@ require_once dirname(__DIR__, 2) . '/includes/topbar.php';
     <!-- KOP SURAT RESMI CABANG -->
     <div class="border-b-4 border-double border-slate-800 pb-5 mb-6 text-center">
         <div class="flex items-center justify-center gap-4 mb-2">
-            <div class="w-12 h-12 rounded-xl bg-slate-900 text-white flex items-center justify-center font-black text-2xl print:bg-black">
-                <i class="fa-solid fa-graduation-cap"></i>
-            </div>
+            <img src="<?= asset_url('img/logo.png') ?>" alt="Logo Bisolpin Academy" class="w-16 h-16 object-contain">
             <div class="text-left">
                 <h2 class="text-2xl font-black text-slate-900 tracking-tight uppercase">BISOLPIN ACADEMY</h2>
                 <h3 class="text-sm font-bold text-slate-700 tracking-wide uppercase"><?= e($cabang['nama_cabang']) ?></h3>

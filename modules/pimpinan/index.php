@@ -129,39 +129,52 @@ $stmtProdukTerbaru = $db->query("
 $produkTerbaruList = $stmtProdukTerbaru->fetchAll();
 
 // 6. Indeks Kepuasan Pengajaran Nasional (IKM Engine)
-if ($activeBranchFilter) {
-    $stmtIkm = $db->prepare("
-        SELECT 
-            COALESCE(AVG(nilai_rata_rata), 0) as avg_ikm,
-            COALESCE(AVG(skor_materi), 0) as avg_materi,
-            COALESCE(AVG(skor_penyampaian), 0) as avg_penyampaian,
-            COALESCE(AVG(skor_kedisiplinan), 0) as avg_kedisiplinan,
-            COALESCE(AVG(skor_kesabaran), 0) as avg_kesabaran,
-            COUNT(*) as total_evaluasi
-        FROM tabel_evaluasi_mentor 
-        WHERE id_cabang = ?
-    ");
-    $stmtIkm->execute([$activeBranchFilter]);
-} else {
-    $stmtIkm = $db->query("
-        SELECT 
-            COALESCE(AVG(nilai_rata_rata), 0) as avg_ikm,
-            COALESCE(AVG(skor_materi), 0) as avg_materi,
-            COALESCE(AVG(skor_penyampaian), 0) as avg_penyampaian,
-            COALESCE(AVG(skor_kedisiplinan), 0) as avg_kedisiplinan,
-            COALESCE(AVG(skor_kesabaran), 0) as avg_kesabaran,
-            COUNT(*) as total_evaluasi
-        FROM tabel_evaluasi_mentor
-    ");
+ensure_table_evaluasi_mentor_exists($db);
+$avgIkm = 0.0;
+$avgIkmMateri = 0.0;
+$avgIkmPenyampaian = 0.0;
+$avgIkmDisiplin = 0.0;
+$avgIkmSabar = 0.0;
+$totalIkmEvaluasi = 0;
+$ikmBadge = get_ikm_badge(0);
+
+try {
+    if ($activeBranchFilter) {
+        $stmtIkm = $db->prepare("
+            SELECT 
+                COALESCE(AVG(nilai_rata_rata), 0) as avg_ikm,
+                COALESCE(AVG(skor_materi), 0) as avg_materi,
+                COALESCE(AVG(skor_penyampaian), 0) as avg_penyampaian,
+                COALESCE(AVG(skor_kedisiplinan), 0) as avg_kedisiplinan,
+                COALESCE(AVG(skor_kesabaran), 0) as avg_kesabaran,
+                COUNT(*) as total_evaluasi
+            FROM tabel_evaluasi_mentor 
+            WHERE id_cabang = ?
+        ");
+        $stmtIkm->execute([$activeBranchFilter]);
+    } else {
+        $stmtIkm = $db->query("
+            SELECT 
+                COALESCE(AVG(nilai_rata_rata), 0) as avg_ikm,
+                COALESCE(AVG(skor_materi), 0) as avg_materi,
+                COALESCE(AVG(skor_penyampaian), 0) as avg_penyampaian,
+                COALESCE(AVG(skor_kedisiplinan), 0) as avg_kedisiplinan,
+                COALESCE(AVG(skor_kesabaran), 0) as avg_kesabaran,
+                COUNT(*) as total_evaluasi
+            FROM tabel_evaluasi_mentor
+        ");
+    }
+    $ikmData = $stmtIkm->fetch();
+    $avgIkm = round((float)($ikmData['avg_ikm'] ?? 0), 2);
+    $avgIkmMateri = round((float)($ikmData['avg_materi'] ?? 0), 2);
+    $avgIkmPenyampaian = round((float)($ikmData['avg_penyampaian'] ?? 0), 2);
+    $avgIkmDisiplin = round((float)($ikmData['avg_kedisiplinan'] ?? 0), 2);
+    $avgIkmSabar = round((float)($ikmData['avg_kesabaran'] ?? 0), 2);
+    $totalIkmEvaluasi = (int)($ikmData['total_evaluasi'] ?? 0);
+    $ikmBadge = get_ikm_badge($avgIkm);
+} catch (\Throwable $e) {
+    error_log("Error query IKM di pimpinan/index.php: " . $e->getMessage());
 }
-$ikmData = $stmtIkm->fetch();
-$avgIkm = round((float)($ikmData['avg_ikm'] ?? 0), 2);
-$avgIkmMateri = round((float)($ikmData['avg_materi'] ?? 0), 2);
-$avgIkmPenyampaian = round((float)($ikmData['avg_penyampaian'] ?? 0), 2);
-$avgIkmDisiplin = round((float)($ikmData['avg_kedisiplinan'] ?? 0), 2);
-$avgIkmSabar = round((float)($ikmData['avg_kesabaran'] ?? 0), 2);
-$totalIkmEvaluasi = (int)($ikmData['total_evaluasi'] ?? 0);
-$ikmBadge = get_ikm_badge($avgIkm);
 
 require_once dirname(__DIR__, 2) . '/includes/header.php';
 require_once dirname(__DIR__, 2) . '/includes/sidebar.php';
@@ -205,9 +218,9 @@ require_once dirname(__DIR__, 2) . '/includes/topbar.php';
             </a>
         <?php endif; ?>
 
-        <a href="<?= base_url('modules/pimpinan/layanan_pusat.php') ?>" class="btn-brand text-xs py-2 px-3">
-            <i class="fa-solid fa-plus text-xs mr-1"></i>
-            <span>Tambah Layanan</span>
+        <a href="<?= base_url('modules/pimpinan/monitoring_cabang.php') ?>" class="btn-brand text-xs py-2 px-3">
+            <i class="fa-solid fa-building-columns text-xs mr-1"></i>
+            <span>Monitoring Cabang</span>
         </a>
     </div>
 </div>

@@ -36,45 +36,62 @@ if (!$mentor) {
 
 $mentorId = (int)$mentor['id'];
 
-// 1. Ambil Ringkasan Statistik Rating & 4 Aspek Pedagogis
-$stmtStats = $db->prepare("
-    SELECT 
-        COUNT(*) as total_penilai,
-        COALESCE(AVG(nilai_rata_rata), 0) as avg_keseluruhan,
-        COALESCE(AVG(skor_materi), 0) as avg_materi,
-        COALESCE(AVG(skor_penyampaian), 0) as avg_penyampaian,
-        COALESCE(AVG(skor_kedisiplinan), 0) as avg_kedisiplinan,
-        COALESCE(AVG(skor_kesabaran), 0) as avg_kesabaran,
-        SUM(CASE WHEN nilai_rata_rata >= 4.5 THEN 1 ELSE 0 END) as cnt_bintang_5,
-        SUM(CASE WHEN nilai_rata_rata >= 3.5 AND nilai_rata_rata < 4.5 THEN 1 ELSE 0 END) as cnt_bintang_4,
-        SUM(CASE WHEN nilai_rata_rata >= 2.5 AND nilai_rata_rata < 3.5 THEN 1 ELSE 0 END) as cnt_bintang_3,
-        SUM(CASE WHEN nilai_rata_rata < 2.5 THEN 1 ELSE 0 END) as cnt_bintang_rendah
-    FROM tabel_evaluasi_mentor
-    WHERE id_mentor = ?
-");
-$stmtStats->execute([$mentorId]);
-$stats = $stmtStats->fetch();
+// Auto-migrate: Pastikan tabel_evaluasi_mentor sudah ada di database
+ensure_table_evaluasi_mentor_exists($db);
 
-$totalPenilai    = (int)($stats['total_penilai'] ?? 0);
-$avgKeseluruhan  = round((float)($stats['avg_keseluruhan'] ?? 0), 2);
-$avgMateri       = round((float)($stats['avg_materi'] ?? 0), 2);
-$avgPenyampaian  = round((float)($stats['avg_penyampaian'] ?? 0), 2);
-$avgKedisiplinan = round((float)($stats['avg_kedisiplinan'] ?? 0), 2);
-$avgKesabaran    = round((float)($stats['avg_kesabaran'] ?? 0), 2);
+$totalPenilai    = 0;
+$avgKeseluruhan  = 0.0;
+$avgMateri       = 0.0;
+$avgPenyampaian  = 0.0;
+$avgKedisiplinan = 0.0;
+$avgKesabaran    = 0.0;
+$ikmBadge        = get_ikm_badge(0);
+$persenKepuasan  = 0;
+$reviews         = [];
 
-$ikmBadge        = get_ikm_badge($avgKeseluruhan);
-$persenKepuasan  = $avgKeseluruhan > 0 ? round(($avgKeseluruhan / 5.0) * 100, 1) : 0;
+try {
+    // 1. Ambil Ringkasan Statistik Rating & 4 Aspek Pedagogis
+    $stmtStats = $db->prepare("
+        SELECT 
+            COUNT(*) as total_penilai,
+            COALESCE(AVG(nilai_rata_rata), 0) as avg_keseluruhan,
+            COALESCE(AVG(skor_materi), 0) as avg_materi,
+            COALESCE(AVG(skor_penyampaian), 0) as avg_penyampaian,
+            COALESCE(AVG(skor_kedisiplinan), 0) as avg_kedisiplinan,
+            COALESCE(AVG(skor_kesabaran), 0) as avg_kesabaran,
+            SUM(CASE WHEN nilai_rata_rata >= 4.5 THEN 1 ELSE 0 END) as cnt_bintang_5,
+            SUM(CASE WHEN nilai_rata_rata >= 3.5 AND nilai_rata_rata < 4.5 THEN 1 ELSE 0 END) as cnt_bintang_4,
+            SUM(CASE WHEN nilai_rata_rata >= 2.5 AND nilai_rata_rata < 3.5 THEN 1 ELSE 0 END) as cnt_bintang_3,
+            SUM(CASE WHEN nilai_rata_rata < 2.5 THEN 1 ELSE 0 END) as cnt_bintang_rendah
+        FROM tabel_evaluasi_mentor
+        WHERE id_mentor = ?
+    ");
+    $stmtStats->execute([$mentorId]);
+    $stats = $stmtStats->fetch();
 
-// 2. Ambil Riwayat Ulasan & Feedback Siswa (Semua dibuat Anonim: "Siswa Bisolpin")
-$stmtReviews = $db->prepare("
-    SELECT e.*, l.nama_layanan, l.kode_layanan
-    FROM tabel_evaluasi_mentor e
-    JOIN tabel_layanan l ON l.id = e.id_layanan
-    WHERE e.id_mentor = ?
-    ORDER BY e.created_at DESC
-");
-$stmtReviews->execute([$mentorId]);
-$reviews = $stmtReviews->fetchAll();
+    $totalPenilai    = (int)($stats['total_penilai'] ?? 0);
+    $avgKeseluruhan  = round((float)($stats['avg_keseluruhan'] ?? 0), 2);
+    $avgMateri       = round((float)($stats['avg_materi'] ?? 0), 2);
+    $avgPenyampaian  = round((float)($stats['avg_penyampaian'] ?? 0), 2);
+    $avgKedisiplinan = round((float)($stats['avg_kedisiplinan'] ?? 0), 2);
+    $avgKesabaran    = round((float)($stats['avg_kesabaran'] ?? 0), 2);
+
+    $ikmBadge        = get_ikm_badge($avgKeseluruhan);
+    $persenKepuasan  = $avgKeseluruhan > 0 ? round(($avgKeseluruhan / 5.0) * 100, 1) : 0;
+
+    // 2. Ambil Riwayat Ulasan & Feedback Siswa (Semua dibuat Anonim: "Siswa Bisolpin")
+    $stmtReviews = $db->prepare("
+        SELECT e.*, l.nama_layanan, l.kode_layanan
+        FROM tabel_evaluasi_mentor e
+        JOIN tabel_layanan l ON l.id = e.id_layanan
+        WHERE e.id_mentor = ?
+        ORDER BY e.created_at DESC
+    ");
+    $stmtReviews->execute([$mentorId]);
+    $reviews = $stmtReviews->fetchAll();
+} catch (\Throwable $e) {
+    error_log("Error pada evaluasi_saya.php: " . $e->getMessage());
+}
 
 require_once dirname(__DIR__, 2) . '/includes/header.php';
 require_once dirname(__DIR__, 2) . '/includes/sidebar.php';

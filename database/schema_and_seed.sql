@@ -6,6 +6,8 @@
 
 SET FOREIGN_KEY_CHECKS = 0;
 
+DROP TABLE IF EXISTS `tabel_maintenance_log`;
+DROP TABLE IF EXISTS `tabel_pembayaran`;
 DROP TABLE IF EXISTS `tabel_evaluasi_mentor`;
 DROP TABLE IF EXISTS `riwayat_layanan_siswa`;
 DROP TABLE IF EXISTS `jadwal_kelas`;
@@ -352,6 +354,53 @@ CREATE TABLE `tabel_evaluasi_mentor` (
   CONSTRAINT `fk_eval_layanan` FOREIGN KEY (`id_layanan`) REFERENCES `tabel_layanan` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ------------------------------------------------------------------------------
+-- 11. TABEL LOG PEMELIHARAAN SARPRAS (tabel_maintenance_log)
+-- ------------------------------------------------------------------------------
+CREATE TABLE `tabel_maintenance_log` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `id_cabang` INT NOT NULL,
+  `id_aset` INT NOT NULL,
+  `tanggal_maintenance` DATE NOT NULL,
+  `jenis_perbaikan` VARCHAR(150) NOT NULL,
+  `biaya_perbaikan` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  `teknisi_pelaksana` VARCHAR(150) NOT NULL,
+  `kondisi_sebelum` ENUM('baik','perlu_perbaikan','rusak_berat') NOT NULL,
+  `kondisi_setelah` ENUM('baik','perlu_perbaikan','rusak_berat') NOT NULL,
+  `keterangan_tindakan` TEXT NOT NULL,
+  `created_by` INT NOT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_maint_cabang` (`id_cabang`),
+  INDEX `idx_maint_aset` (`id_aset`),
+  CONSTRAINT `fk_maint_cabang` FOREIGN KEY (`id_cabang`) REFERENCES `tabel_cabang` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_maint_aset` FOREIGN KEY (`id_aset`) REFERENCES `tabel_aset` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------------------------
+-- 12. TABEL TRANSAKSI KASIR & PEMBAYARAN SPP (tabel_pembayaran)
+-- ------------------------------------------------------------------------------
+CREATE TABLE `tabel_pembayaran` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `id_cabang` INT NOT NULL,
+  `id_siswa` INT NOT NULL,
+  `id_layanan` INT NOT NULL,
+  `kode_transaksi` VARCHAR(50) NOT NULL UNIQUE,
+  `tanggal_bayar` DATE NOT NULL,
+  `jumlah_bayar` DECIMAL(12,2) NOT NULL,
+  `metode_pembayaran` ENUM('tunai','transfer_bank','qris') NOT NULL DEFAULT 'tunai',
+  `status_pembayaran` ENUM('lunas','cicilan','menunggu_konfirmasi') NOT NULL DEFAULT 'lunas',
+  `bukti_transfer` VARCHAR(255) NULL,
+  `catatan` TEXT NULL,
+  `diterima_oleh` INT NOT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_bayar_cabang` (`id_cabang`),
+  INDEX `idx_bayar_siswa` (`id_siswa`),
+  INDEX `idx_bayar_layanan` (`id_layanan`),
+  CONSTRAINT `fk_bayar_cabang` FOREIGN KEY (`id_cabang`) REFERENCES `tabel_cabang` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_bayar_siswa` FOREIGN KEY (`id_siswa`) REFERENCES `tabel_siswa` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_bayar_layanan` FOREIGN KEY (`id_layanan`) REFERENCES `tabel_layanan` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;
 
 
@@ -371,7 +420,8 @@ SET FOREIGN_KEY_CHECKS = 0;
 INSERT INTO `tabel_cabang` (`id`, `kode_cabang`, `nama_cabang`, `id_direktur_cabang`, `alamat`, `kota`, `provinsi`, `telepon`, `email_cabang`, `nomor_izin_mitra`, `dokumen_kemitraan`, `status_mitra`, `tanggal_bergabung`, `created_at`) VALUES
 (1, 'CBG-MKS-01', 'Bisolpin Cabang Utama Makassar', NULL, 'Jl. A.P. Pettarani No. 88, Sinrijala, Kec. Panakkukang', 'Kota Makassar', 'Sulawesi Selatan', '0411-889977', 'makassar@bisolpin.com', 'MITRA-MKS-2025-001', 'mou_makassar_terverifikasi.pdf', 'aktif', '2025-01-10', NOW()),
 (2, 'CBG-JKT-02', 'Bisolpin Cabang Jakarta Selatan', NULL, 'Jl. Tebet Raya No. 45, Tebet Timur, Jakarta Selatan', 'Jakarta Selatan', 'DKI Jakarta', '021-83701234', 'jaksel@bisolpin.com', 'MITRA-JKT-2025-004', 'mou_jaksel_terverifikasi.pdf', 'aktif', '2025-03-01', NOW()),
-(3, 'CBG-SBY-03', 'Bisolpin Cabang Surabaya Gubeng', NULL, 'Jl. Raya Gubeng No. 12, Gubeng, Kec. Gubeng', 'Kota Surabaya', 'Jawa Timur', '031-5021234', 'surabaya.gubeng@bisolpin.com', 'REG-SBY-2026-X09', 'proposal_kemitraan_surabaya.pdf', 'pending_review', NULL, NOW());
+(3, 'CBG-SBY-03', 'Bisolpin Cabang Surabaya Gubeng', NULL, 'Jl. Raya Gubeng No. 12, Gubeng, Kec. Gubeng', 'Kota Surabaya', 'Jawa Timur', '031-5021234', 'surabaya.gubeng@bisolpin.com', 'REG-SBY-2026-X09', 'proposal_kemitraan_surabaya.pdf', 'pending_review', NULL, NOW()),
+(4, 'CBG-KLA-04', 'Bisolpin Cabang Kolaka', NULL, 'Jl. Pramuka No. 18, Lamokato, Kec. Kolaka', 'Kabupaten Kolaka', 'Sulawesi Tenggara', '0405-232188', 'kolaka@bisolpin.com', 'MITRA-KLA-2025-007', 'mou_kolaka_terverifikasi.pdf', 'aktif', '2025-02-15', NOW());
 
 -- ------------------------------------------------------------------------------
 -- SEED DATA: PENGGUNA (users) - 7 ROLE
@@ -394,11 +444,18 @@ INSERT INTO `users` (`id`, `username`, `email`, `password_hash`, `role`, `id_cab
 -- 8. Siswa 1 (Siswa Aktif Cabang Makassar)
 (8, 'siswa_rizky', 'siswa.rizky@gmail.com', '$2y$10$OBBayw84fmCV4He3ykQ1GOs6F/bTZ1wAfuc45CxBy6CPVRRvw6Dj2', 'siswa', 1, 1, NOW(), NOW()),
 -- 9. Siswa 2 (Siswa Aktif Cabang Makassar)
-(9, 'siswa_alya', 'siswa.alya@gmail.com', '$2y$10$OBBayw84fmCV4He3ykQ1GOs6F/bTZ1wAfuc45CxBy6CPVRRvw6Dj2', 'siswa', 1, 1, NOW(), NOW());
+(9, 'siswa_alya', 'siswa.alya@gmail.com', '$2y$10$OBBayw84fmCV4He3ykQ1GOs6F/bTZ1wAfuc45CxBy6CPVRRvw6Dj2', 'siswa', 1, 1, NOW(), NOW()),
+-- 10. Direktur Cabang (Cabang Kolaka - Aktif)
+(10, 'direktur_kolaka', 'direktur.kolaka@bisolpin.com', '$2y$10$OBBayw84fmCV4He3ykQ1GOs6F/bTZ1wAfuc45CxBy6CPVRRvw6Dj2', 'direktur_cabang', 4, 1, NOW(), NOW()),
+-- 11. Mentor Cabang Kolaka (Aktif)
+(11, 'mentor_kolaka', 'mentor.kolaka@bisolpin.com', '$2y$10$OBBayw84fmCV4He3ykQ1GOs6F/bTZ1wAfuc45CxBy6CPVRRvw6Dj2', 'mentor', 4, 1, NOW(), NOW()),
+-- 12. Staff Cabang Kolaka (Aktif)
+(12, 'staff_kolaka', 'staff.kolaka@bisolpin.com', '$2y$10$OBBayw84fmCV4He3ykQ1GOs6F/bTZ1wAfuc45CxBy6CPVRRvw6Dj2', 'staff', 4, 1, NOW(), NOW());
 
 -- Update referensi direktur cabang
 UPDATE `tabel_cabang` SET `id_direktur_cabang` = 2 WHERE `id` = 1;
 UPDATE `tabel_cabang` SET `id_direktur_cabang` = 3 WHERE `id` = 3;
+UPDATE `tabel_cabang` SET `id_direktur_cabang` = 10 WHERE `id` = 4;
 
 -- ------------------------------------------------------------------------------
 -- SEED DATA: PEGAWAI (tabel_pegawai)
@@ -410,7 +467,10 @@ INSERT INTO `tabel_pegawai` (`id`, `user_id`, `id_cabang`, `nip_pegawai`, `nama_
 (4, 4, NULL, 'PST-BAK-001', 'Prof. Dr. Nurul Hidayati, M.Sc.', 'bak', 'Kurikulum & Asesmen Nasional', '08114567890', 'Perum Dosen Unhas Tamalanrea Blok AC-12, Makassar', 'tetap', 'aktif', '2024-03-01', NOW()),
 (5, 5, 1, 'MKS-MEN-001', 'Ahmad Farhan Fadillah, S.Kom.', 'mentor', 'Coding Web & Robotik Anak', '085299887766', 'Jl. Toddopuli Raya Timur No. 25, Makassar', 'tetap', 'aktif', '2025-02-01', NOW()),
 (6, 6, 1, 'MKS-STF-001', 'Siti Rahmawati, S.Sos.', 'staff', 'Administrasi & Keuangan Cabang', '082190807060', 'Jl. Urip Sumoharjo KM 4, Makassar', 'tetap', 'aktif', '2025-01-15', NOW()),
-(7, 7, 1, 'MKS-SRP-001', 'Budi Santoso, A.Md.T.', 'sarpras', 'Teknisi Jaringan & Pemeliharaan Gedung', '087841552233', 'Jl. Veteran Selatan No. 210, Makassar', 'tetap', 'aktif', '2025-01-20', NOW());
+(7, 7, 1, 'MKS-SRP-001', 'Budi Santoso, A.Md.T.', 'sarpras', 'Teknisi Jaringan & Pemeliharaan Gedung', '087841552233', 'Jl. Veteran Selatan No. 210, Makassar', 'tetap', 'aktif', '2025-01-20', NOW()),
+(8, 10, 4, 'CBG-KLA-DIR01', 'drh. Andi Mappatunru, M.Si.', 'direktur_cabang', 'Manajemen Kemitraan Wilayah', '085242110099', 'Jl. Pemuda No. 77, Kolaka', 'tetap', 'aktif', '2025-02-15', NOW()),
+(9, 11, 4, 'KLA-MEN-001', 'Muh. Ilham Pratama, S.Pd.', 'mentor', 'Matematika & Coding Dasar', '082344556677', 'Jl. Mekongga Indah Blok B, Kolaka', 'tetap', 'aktif', '2025-02-20', NOW()),
+(10, 12, 4, 'KLA-STF-001', 'Nurul Wahyuni, S.Kom.', 'staff', 'Administrasi & Layanan Cabang', '085399881122', 'Jl. Abadi No. 12, Kolaka', 'tetap', 'aktif', '2025-02-20', NOW());
 
 -- ------------------------------------------------------------------------------
 -- SEED DATA: LAYANAN KURSUS OFFLINE (tabel_layanan)
@@ -520,5 +580,19 @@ INSERT INTO `tabel_produk` (`id`, `id_cabang`, `kategori_kepemilikan`, `id_siswa
 -- ------------------------------------------------------------------------------
 INSERT INTO `tabel_evaluasi_mentor` (`id`, `id_cabang`, `id_siswa`, `id_mentor`, `id_layanan`, `skor_materi`, `skor_penyampaian`, `skor_kedisiplinan`, `skor_kesabaran`, `nilai_rata_rata`, `ulasan_saran`, `is_anonymous`, `created_at`) VALUES
 (1, 1, 2, 5, 5, 5, 5, 5, 5, 5.00, 'Kak Farhan mengajarnya sangat sabar dan ramah. Penjelasan CSS Flexbox yang awalnya sulit jadi sangat mudah dipahami. Terima kasih Kak!', 1, NOW() - INTERVAL 3 DAY);
+
+-- ------------------------------------------------------------------------------
+-- SEED DATA: LOG PEMELIHARAAN SARPRAS (tabel_maintenance_log)
+-- ------------------------------------------------------------------------------
+INSERT INTO `tabel_maintenance_log` (`id`, `id_cabang`, `id_aset`, `tanggal_maintenance`, `jenis_perbaikan`, `biaya_perbaikan`, `teknisi_pelaksana`, `kondisi_sebelum`, `kondisi_setelah`, `keterangan_tindakan`, `created_by`, `created_at`) VALUES
+(1, 1, 1, '2025-01-25', 'Servis Cuci AC & Pengecekan Kelistrikan', 350000.00, 'CV Hawa Sejuk Bersama', 'perlu_perbaikan', 'baik', 'Pembersihan filter AC 2 PK dan pengisian freon R32. Temperatur ruang kelas stabil di 22C.', 7, NOW()),
+(2, 1, 2, '2025-02-02', 'Optimalisasi Jaringan Gigabit LAN & Re-imaging OS', 500000.00, 'Budi Santoso (Sarpras)', 'perlu_perbaikan', 'baik', 'Peremajaan kabel switch hub port 8 dan deploy software VS Code serta compiler C++ untuk 20 PC.', 7, NOW());
+
+-- ------------------------------------------------------------------------------
+-- SEED DATA: TRANSAKSI KASIR & PEMBAYARAN SPP (tabel_pembayaran)
+-- ------------------------------------------------------------------------------
+INSERT INTO `tabel_pembayaran` (`id`, `id_cabang`, `id_siswa`, `id_layanan`, `kode_transaksi`, `tanggal_bayar`, `jumlah_bayar`, `metode_pembayaran`, `status_pembayaran`, `catatan`, `diterima_oleh`, `created_at`) VALUES
+(1, 1, 1, 5, 'INV-202502-001', '2025-02-01', 1850000.00, 'transfer_bank', 'lunas', 'Pembayaran lunas pendaftaran kursus Junior Web Developer & Robotik.', 6, NOW()),
+(2, 1, 2, 5, 'INV-202502-002', '2025-02-03', 1000000.00, 'tunai', 'cicilan', 'Pembayaran cicilan tahap 1 kursus tatap muka.', 6, NOW());
 
 SET FOREIGN_KEY_CHECKS = 1;

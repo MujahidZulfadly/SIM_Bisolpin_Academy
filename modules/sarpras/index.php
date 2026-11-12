@@ -129,6 +129,10 @@ require_once dirname(__DIR__, 2) . '/includes/topbar.php';
     </div>
 
     <div class="flex items-center gap-2.5">
+        <a href="<?= base_url('modules/absensi/riwayat_saya.php') ?>" class="px-3.5 py-2.5 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-700 text-xs font-bold border border-teal-200 transition-all flex items-center gap-1.5 shadow-sm">
+            <i class="fa-solid fa-user-clock"></i>
+            <span>Ceklok Mandiri</span>
+        </a>
         <a href="<?= base_url('modules/sarpras/inventaris.php') ?>" class="btn-brand text-xs py-2.5 shadow-md shadow-brand-500/20">
             <i class="fa-solid fa-boxes-stacked text-xs"></i>
             <span>Kelola Inventaris</span>

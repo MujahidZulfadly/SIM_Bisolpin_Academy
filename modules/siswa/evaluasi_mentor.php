@@ -44,13 +44,21 @@ $branchId  = (int)$siswa['id_cabang'];
 $layananId = (int)$siswa['id_layanan'];
 $mentorId  = (int)($siswa['id_mentor_pembimbing'] ?? 0);
 
-// Cek apakah siswa sudah pernah memberikan evaluasi untuk mentor & layanan ini
-$stmtEval = $db->prepare("
-    SELECT * FROM tabel_evaluasi_mentor 
-    WHERE id_siswa = ? AND id_mentor = ? AND id_layanan = ?
-");
-$stmtEval->execute([$siswaId, $mentorId, $layananId]);
-$evaluasiExisting = $stmtEval->fetch();
+// Auto-migrate: Pastikan tabel_evaluasi_mentor sudah ada di database
+ensure_table_evaluasi_mentor_exists($db);
+
+$evaluasiExisting = null;
+try {
+    // Cek apakah siswa sudah pernah memberikan evaluasi untuk mentor & layanan ini
+    $stmtEval = $db->prepare("
+        SELECT * FROM tabel_evaluasi_mentor 
+        WHERE id_siswa = ? AND id_mentor = ? AND id_layanan = ?
+    ");
+    $stmtEval->execute([$siswaId, $mentorId, $layananId]);
+    $evaluasiExisting = $stmtEval->fetch();
+} catch (\Throwable $e) {
+    error_log("Error cek evaluasi existing: " . $e->getMessage());
+}
 
 // ------------------------------------------------------------------------------
 // PENANGANAN FORM SUBMIT EVALUASI

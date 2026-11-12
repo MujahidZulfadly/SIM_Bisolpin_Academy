@@ -5,7 +5,7 @@
 
 declare(strict_types=1);
 
-$pageTitle = 'Manajemen Program Kursus & Kurikulum';
+$pageTitle = 'Layanan Kursus Pusat';
 
 require_once dirname(__DIR__, 2) . '/config/app.php';
 require_once dirname(__DIR__, 2) . '/config/database.php';
@@ -144,17 +144,17 @@ require_once dirname(__DIR__, 2) . '/includes/topbar.php';
     <div>
         <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold mb-2">
             <i class="fa-solid fa-layer-group"></i>
-            <span>Struktur Akademik Resmi</span>
+            <span>Standarisasi Akademik Pusat</span>
         </div>
-        <h1 class="text-2xl font-black text-slate-800 tracking-tight">Master Layanan & Silabus Kurikulum</h1>
+        <h1 class="text-2xl font-black text-slate-800 tracking-tight">Layanan Kursus Pusat & Kurikulum</h1>
         <p class="text-xs text-slate-500 mt-1">
-            Penetapan bobot pertemuan tatap muka, target capaian belajar, dan rancangan karya produk kelulusan.
+            Kelola master program kursus resmi, penetapan bobot pertemuan tatap muka, harga standar & promo, serta rancangan karya produk kelulusan seluruh cabang.
         </p>
     </div>
 
     <button onclick="openModalCreate()" class="btn-brand text-xs py-2.5 shadow-md shadow-brand-500/20">
         <i class="fa-solid fa-plus text-xs"></i>
-        <span>Tambah Program Kurikulum</span>
+        <span>Tambah Layanan Kursus Baru</span>
     </button>
 </div>
 

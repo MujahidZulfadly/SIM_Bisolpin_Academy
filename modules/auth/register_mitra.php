@@ -162,6 +162,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pendaftaran Kemitraan Cabang | <?= APP_NAME ?></title>
 
+    <!-- Favicon Resmi Bisolpin Academy -->
+    <link rel="icon" type="image/png" href="<?= asset_url('img/logo.png') ?>">
+    <link rel="apple-touch-icon" href="<?= asset_url('img/logo.png') ?>">
+
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -212,8 +216,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     Jadilah bagian dari jaringan bimbingan belajar BISOLPIN di kota Anda. Buka cabang dengan kurikulum terstandardisasi BAK dan sistem manajemen digital lengkap.
                 </p>
             </div>
-            <div class="shrink-0 w-16 h-16 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center text-3xl text-teal-200 border border-white/20">
-                <i class="fa-solid fa-handshake"></i>
+            <div class="shrink-0">
+                <img src="<?= asset_url('img/logo.png') ?>" alt="Logo Bisolpin Academy" class="w-20 h-20 object-contain drop-shadow-sm">
             </div>
         </div>
     </div>

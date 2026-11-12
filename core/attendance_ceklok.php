@@ -13,16 +13,16 @@ require_once __DIR__ . '/flash.php';
 
 /**
  * Cek apakah role user saat ini berhak melakukan Ceklok Mandiri
+ * Sesuai SOP resmi, ceklok mandiri berlaku untuk Staff Administrasi, Mentor Pengajar, dan Sarpras.
+ * Pimpinan Pusat, Direktur Cabang (Mitra), dan BAK tidak dikenakan sistem ceklok.
  */
 function is_eligible_for_ceklok(?string $role = null): bool
 {
     $role = $role ?? auth_role();
     return in_array($role, [
-        ROLE_DIREKTUR_CABANG,
         ROLE_STAFF,
         ROLE_MENTOR,
-        ROLE_SARPRAS,
-        ROLE_BAK
+        ROLE_SARPRAS
     ], true);
 }
 

@@ -61,6 +61,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Masuk Portal SIM-BISOLPIN | <?= APP_NAME ?></title>
 
+    <!-- Favicon Resmi Bisolpin Academy -->
+    <link rel="icon" type="image/png" href="<?= asset_url('img/logo.png') ?>">
+    <link rel="apple-touch-icon" href="<?= asset_url('img/logo.png') ?>">
+
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -106,10 +110,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="absolute -left-16 -bottom-16 w-48 h-48 bg-teal-300/20 rounded-full blur-2xl pointer-events-none"></div>
 
         <div class="relative z-10">
-            <!-- Brand Badge -->
-            <div class="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-white/15 backdrop-blur-md border border-white/20 text-xs font-semibold mb-8">
-                <i class="fa-solid fa-graduation-cap text-teal-200"></i>
-                <span>SIAKAD & Kemitraan Kursus V2</span>
+            <!-- Brand Logo & Badge -->
+            <div class="flex items-center gap-3 mb-6">
+                <img src="<?= asset_url('img/logo.png') ?>" alt="Logo Bisolpin Academy" class="w-16 h-16 object-contain shrink-0 drop-shadow-sm">
+                <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/15 backdrop-blur-md border border-white/20 text-xs font-semibold">
+                    <i class="fa-solid fa-graduation-cap text-teal-200"></i>
+                    <span>SIAKAD & Kemitraan V2</span>
+                </div>
             </div>
 
             <h1 class="text-3xl font-extrabold tracking-tight mb-3">BISOLPIN ACADEMY</h1>
@@ -169,9 +176,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <h2 class="text-2xl font-extrabold text-slate-800">Masuk ke Portal</h2>
                     <p class="text-xs text-slate-400 mt-1">Gunakan akun kredensial Anda untuk melanjutkan</p>
                 </div>
-                <div class="w-10 h-10 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center text-lg shadow-sm">
-                    <i class="fa-solid fa-lock"></i>
-                </div>
+                <img src="<?= asset_url('img/logo.png') ?>" alt="Bisolpin" class="w-14 h-14 object-contain">
             </div>
 
             <!-- Pesan Error jika Ada -->

@@ -21,95 +21,108 @@ $branchId = auth_branch_id() ?? get_active_branch_id() ?? 1;
 verify_branch_access($branchId);
 $db = get_db();
 
+// Auto-migrate: Pastikan tabel_evaluasi_mentor sudah ada di database
+ensure_table_evaluasi_mentor_exists($db);
+
 // Ambil info Cabang
 $stmtCabang = $db->prepare("SELECT * FROM tabel_cabang WHERE id = ?");
 $stmtCabang->execute([$branchId]);
 $cabang = $stmtCabang->fetch();
 
 // 1. Ringkasan Statistik Cabang
-$stmtBranchStats = $db->prepare("
-    SELECT 
-        COUNT(e.id) as total_evaluasi,
-        COALESCE(AVG(e.nilai_rata_rata), 0) as avg_ikm_cabang,
-        COUNT(DISTINCT e.id_mentor) as total_mentor_dinilai
-    FROM tabel_evaluasi_mentor e
-    WHERE e.id_cabang = ?
-");
-$stmtBranchStats->execute([$branchId]);
-$branchStats = $stmtBranchStats->fetch();
-
-$totalEvaluasiCabang = (int)($branchStats['total_evaluasi'] ?? 0);
-$avgIkmCabang        = round((float)($branchStats['avg_ikm_cabang'] ?? 0), 2);
-$ikmCabangBadge      = get_ikm_badge($avgIkmCabang);
-
-// Hitung total mentor aktif di cabang ini
-$stmtTotalMentor = $db->prepare("
-    SELECT COUNT(*) FROM tabel_pegawai 
-    WHERE id_cabang = ? AND jabatan_role = 'mentor' AND status_aktif = 'aktif'
-");
-$stmtTotalMentor->execute([$branchId]);
-$totalMentorAktif = (int)$stmtTotalMentor->fetchColumn();
-
-// 2. Ranking Kinerja Seluruh Mentor di Cabang Ini
-$stmtRanking = $db->prepare("
-    SELECT 
-        p.id as mentor_id,
-        p.nama_lengkap,
-        p.nip_pegawai,
-        p.spesialisasi_mentor,
-        p.foto_profil,
-        p.status_aktif,
-        p.status_kepegawaian,
-        COUNT(e.id) as total_penilai,
-        COALESCE(AVG(e.nilai_rata_rata), 0) as avg_rating,
-        COALESCE(AVG(e.skor_materi), 0) as avg_materi,
-        COALESCE(AVG(e.skor_penyampaian), 0) as avg_penyampaian,
-        COALESCE(AVG(e.skor_kedisiplinan), 0) as avg_kedisiplinan,
-        COALESCE(AVG(e.skor_kesabaran), 0) as avg_kesabaran
-    FROM tabel_pegawai p
-    LEFT JOIN tabel_evaluasi_mentor e ON e.id_mentor = p.id AND e.id_cabang = p.id_cabang
-    WHERE p.id_cabang = ? AND p.jabatan_role = 'mentor' AND p.status_aktif = 'aktif'
-    GROUP BY p.id, p.nama_lengkap, p.nip_pegawai, p.spesialisasi_mentor, p.foto_profil, p.status_aktif, p.status_kepegawaian
-    ORDER BY avg_rating DESC, total_penilai DESC, p.nama_lengkap ASC
-");
-$stmtRanking->execute([$branchId]);
-$rankingList = $stmtRanking->fetchAll();
-
-// Hitung metrik mentor unggul vs butuh pembinaan
-$countUnggul = 0;
+$totalEvaluasiCabang = 0;
+$avgIkmCabang        = 0.0;
+$ikmCabangBadge      = get_ikm_badge(0);
+$totalMentorAktif    = 0;
+$rankingList         = [];
+$reviewsList         = [];
+$countUnggul         = 0;
 $countPerluPembinaan = 0;
-foreach ($rankingList as $r) {
-    $score = (float)$r['avg_rating'];
-    if ($r['total_penilai'] > 0) {
-        if ($score >= 4.50) {
-            $countUnggul++;
-        } elseif ($score < 3.50) {
-            $countPerluPembinaan++;
+
+try {
+    $stmtBranchStats = $db->prepare("
+        SELECT 
+            COUNT(e.id) as total_evaluasi,
+            COALESCE(AVG(e.nilai_rata_rata), 0) as avg_ikm_cabang,
+            COUNT(DISTINCT e.id_mentor) as total_mentor_dinilai
+        FROM tabel_evaluasi_mentor e
+        WHERE e.id_cabang = ?
+    ");
+    $stmtBranchStats->execute([$branchId]);
+    $branchStats = $stmtBranchStats->fetch();
+
+    $totalEvaluasiCabang = (int)($branchStats['total_evaluasi'] ?? 0);
+    $avgIkmCabang        = round((float)($branchStats['avg_ikm_cabang'] ?? 0), 2);
+    $ikmCabangBadge      = get_ikm_badge($avgIkmCabang);
+
+    // Hitung total mentor aktif di cabang ini
+    $stmtTotalMentor = $db->prepare("
+        SELECT COUNT(*) FROM tabel_pegawai 
+        WHERE id_cabang = ? AND jabatan_role = 'mentor' AND status_aktif = 'aktif'
+    ");
+    $stmtTotalMentor->execute([$branchId]);
+    $totalMentorAktif = (int)$stmtTotalMentor->fetchColumn();
+
+    // 2. Ranking Kinerja Seluruh Mentor di Cabang Ini
+    $stmtRanking = $db->prepare("
+        SELECT 
+            p.id as mentor_id,
+            p.nama_lengkap,
+            p.nip_pegawai,
+            p.spesialisasi_mentor,
+            p.status_aktif,
+            p.status_kepegawaian,
+            COUNT(e.id) as total_penilai,
+            COALESCE(AVG(e.nilai_rata_rata), 0) as avg_rating,
+            COALESCE(AVG(e.skor_materi), 0) as avg_materi,
+            COALESCE(AVG(e.skor_penyampaian), 0) as avg_penyampaian,
+            COALESCE(AVG(e.skor_kedisiplinan), 0) as avg_kedisiplinan,
+            COALESCE(AVG(e.skor_kesabaran), 0) as avg_kesabaran
+        FROM tabel_pegawai p
+        LEFT JOIN tabel_evaluasi_mentor e ON e.id_mentor = p.id AND e.id_cabang = p.id_cabang
+        WHERE p.id_cabang = ? AND p.jabatan_role = 'mentor' AND p.status_aktif = 'aktif'
+        GROUP BY p.id, p.nama_lengkap, p.nip_pegawai, p.spesialisasi_mentor, p.status_aktif, p.status_kepegawaian
+        ORDER BY avg_rating DESC, total_penilai DESC, p.nama_lengkap ASC
+    ");
+    $stmtRanking->execute([$branchId]);
+    $rankingList = $stmtRanking->fetchAll();
+
+    // Hitung metrik mentor unggul vs butuh pembinaan
+    foreach ($rankingList as $r) {
+        $score = (float)$r['avg_rating'];
+        if ($r['total_penilai'] > 0) {
+            if ($score >= 4.50) {
+                $countUnggul++;
+            } elseif ($score < 3.50) {
+                $countPerluPembinaan++;
+            }
         }
     }
+
+    // 3. Filter Detail Ulasan Siswa per Mentor
+    $filterMentorId = isset($_GET['mentor_id']) && $_GET['mentor_id'] !== 'all' && is_numeric($_GET['mentor_id']) ? (int)$_GET['mentor_id'] : null;
+
+    $queryReviews = "
+        SELECT e.*, l.nama_layanan, l.kode_layanan, p.nama_lengkap as nama_mentor, p.nip_pegawai, p.spesialisasi_mentor
+        FROM tabel_evaluasi_mentor e
+        JOIN tabel_layanan l ON l.id = e.id_layanan
+        JOIN tabel_pegawai p ON p.id = e.id_mentor
+        WHERE e.id_cabang = ?
+    ";
+    $params = [$branchId];
+
+    if ($filterMentorId) {
+        $queryReviews .= " AND e.id_mentor = ?";
+        $params[] = $filterMentorId;
+    }
+    $queryReviews .= " ORDER BY e.created_at DESC";
+
+    $stmtReviews = $db->prepare($queryReviews);
+    $stmtReviews->execute($params);
+    $reviewsList = $stmtReviews->fetchAll();
+} catch (\Throwable $e) {
+    error_log("Error pada evaluasi_mentor.php: " . $e->getMessage());
 }
-
-// 3. Filter Detail Ulasan Siswa per Mentor
-$filterMentorId = isset($_GET['mentor_id']) && $_GET['mentor_id'] !== 'all' && is_numeric($_GET['mentor_id']) ? (int)$_GET['mentor_id'] : null;
-
-$queryReviews = "
-    SELECT e.*, l.nama_layanan, l.kode_layanan, p.nama_lengkap as nama_mentor, p.nip_pegawai, p.spesialisasi_mentor
-    FROM tabel_evaluasi_mentor e
-    JOIN tabel_layanan l ON l.id = e.id_layanan
-    JOIN tabel_pegawai p ON p.id = e.id_mentor
-    WHERE e.id_cabang = ?
-";
-$params = [$branchId];
-
-if ($filterMentorId) {
-    $queryReviews .= " AND e.id_mentor = ?";
-    $params[] = $filterMentorId;
-}
-$queryReviews .= " ORDER BY e.created_at DESC";
-
-$stmtReviews = $db->prepare($queryReviews);
-$stmtReviews->execute($params);
-$reviewsList = $stmtReviews->fetchAll();
 
 require_once dirname(__DIR__, 2) . '/includes/header.php';
 require_once dirname(__DIR__, 2) . '/includes/sidebar.php';
