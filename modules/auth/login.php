@@ -39,7 +39,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($user && password_verify($password, $user['password_hash'])) {
             if ((int)$user['is_active'] !== 1) {
                 if ($user['role'] === ROLE_DIREKTUR_CABANG) {
-                    $errorMessage = 'Pengajuan kemitraan cabang Anda saat ini masih dalam tahap peninjauan (Pending Review) oleh Pimpinan Pusat. Silakan tunggu verifikasi resmi.';
+                    $stmtCabang = $db->prepare("SELECT nama_cabang, status_mitra, catatan_review_pimpinan FROM tabel_cabang WHERE id = ? OR id_direktur_cabang = ? LIMIT 1");
+                    $stmtCabang->execute([$user['id_cabang'], $user['id']]);
+                    $cabangInfo = $stmtCabang->fetch();
+
+                    if ($cabangInfo && $cabangInfo['status_mitra'] === 'menunggu_aktivasi_admin') {
+                        $errorMessage = 'Dokumen kemitraan cabang <strong>' . e($cabangInfo['nama_cabang']) . '</strong> telah DISETUJUI oleh Pimpinan Pusat! Saat ini akun Anda sedang dalam antrean persetujuan teknis & aktivasi akun oleh Admin Sistem.';
+                    } elseif ($cabangInfo && $cabangInfo['status_mitra'] === 'ditolak') {
+                        $errorMessage = 'Permohonan kemitraan cabang Anda belum disetujui oleh Pimpinan Pusat. Catatan: ' . e($cabangInfo['catatan_review_pimpinan'] ?? 'Silakan hubungi Kantor Pusat.');
+                    } else {
+                        $errorMessage = 'Pengajuan kemitraan cabang Anda saat ini masih dalam tahap peninjauan dokumen oleh Pimpinan Pusat.';
+                    }
                 } else {
                     $errorMessage = 'Akun Anda dinonaktifkan oleh administrator. Silakan hubungi bagian administrasi.';
                 }
@@ -204,7 +214,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
                 <div>
-                    <label for="password" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">Kata Sandi</label>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label for="password" class="block text-xs font-bold uppercase tracking-wider text-slate-600">Kata Sandi</label>
+                        <a href="<?= base_url('modules/auth/forgot_password.php') ?>" class="text-xs font-bold text-brand-600 hover:text-brand-700 hover:underline transition-all">
+                            Lupa Kata Sandi?
+                        </a>
+                    </div>
                     <div class="relative">
                         <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
                             <i class="fa-solid fa-key text-sm"></i>
@@ -227,13 +242,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </form>
 
             <!-- ============================================================= -->
-            <!-- PANEL QUICK LOGIN DEMO (7 ROLE BISOLPIN)                      -->
+            <!-- PANEL QUICK LOGIN DEMO (8 ROLE BISOLPIN)                      -->
             <!-- ============================================================= -->
             <div class="mt-6 pt-5 border-t border-slate-200">
                 <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center gap-1.5">
                         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
-                            <i class="fa-solid fa-bolt mr-1"></i> Quick Login Demo (7 Role)
+                            <i class="fa-solid fa-bolt mr-1"></i> Quick Login Demo (8 Role)
                         </span>
                     </div>
                     <span class="text-[11px] font-mono text-slate-400">Default Pass: <strong>password123</strong></span>
@@ -243,8 +258,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     Klik salah satu peran di bawah untuk mengisi kredensial secara instan saat simulasi & presentasi pimpinan:
                 </p>
 
-                <!-- Grid 7 Tombol Role Cepat -->
+                <!-- Grid 8 Tombol Role Cepat -->
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                    <!-- 0. ADMIN SISTEM -->
+                    <button type="button" onclick="fillAndHighlight('admin.sistem', 'Administrator IT (Sysadmin)', this)" class="role-demo-btn p-2 rounded-xl border border-cyan-300 bg-cyan-50/80 hover:bg-cyan-100 text-cyan-900 font-bold text-left transition-all hover:scale-[1.02]">
+                        <span class="block text-[9px] font-semibold uppercase tracking-wider text-cyan-700">0. IT Admin</span>
+                        <div class="flex items-center gap-1.5 mt-0.5">
+                            <span>💻</span>
+                            <span class="truncate">Admin Sistem</span>
+                        </div>
+                    </button>
+
                     <!-- 1. PIMPINAN -->
                     <button type="button" onclick="fillAndHighlight('pimpinan', 'Pusat (Super Admin)', this)" class="role-demo-btn p-2 rounded-xl border border-purple-200 bg-purple-50/70 hover:bg-purple-100 text-purple-900 font-bold text-left transition-all hover:scale-[1.02]">
                         <span class="block text-[9px] font-semibold uppercase tracking-wider text-purple-600">1. Pusat</span>

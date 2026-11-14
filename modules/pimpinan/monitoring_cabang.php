@@ -76,6 +76,8 @@ foreach ($cabangList as $c) {
         'total_aset'              => (int)$c['total_aset'],
         'total_nilai_aset'        => format_rupiah((float)$c['total_nilai_aset']),
         'total_produk'            => (int)$c['total_produk'],
+        'lat'                     => !empty($c['latitude']) ? (float)$c['latitude'] : -5.147665,
+        'lng'                     => !empty($c['longitude']) ? (float)$c['longitude'] : 119.432732,
     ];
 }
 
@@ -190,6 +192,30 @@ require_once dirname(__DIR__, 2) . '/includes/topbar.php';
         </div>
     </div>
 <?php endif; ?>
+
+<!-- Peta Sebaran Interaktif Cabang -->
+<div class="card overflow-hidden p-0 mb-8 border border-slate-200/90 shadow-sm">
+    <div class="p-4 bg-white border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center text-sm">
+                <i class="fa-solid fa-map-location-dot"></i>
+            </div>
+            <div>
+                <h3 class="text-sm font-bold text-slate-800">Peta Sebaran Lokasi Jaringan Cabang</h3>
+                <p class="text-[11px] text-slate-400">Klik pin pada peta untuk membuka modal inspeksi performa cabang tanpa reload.</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-3 text-xs">
+            <span class="inline-flex items-center gap-1.5 font-bold text-slate-600">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Aktif
+            </span>
+            <span class="inline-flex items-center gap-1.5 font-bold text-slate-600">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Pending
+            </span>
+        </div>
+    </div>
+    <div id="monitoringBranchMap" class="w-full h-[340px] bg-slate-100 z-10"></div>
+</div>
 
 <!-- Grid Kartu Cabang -->
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
@@ -760,6 +786,70 @@ document.getElementById('modalTinjauCabang').addEventListener('click', function(
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         closeModalTinjau();
+    }
+});
+
+// Inisialisasi Peta Leaflet untuk Monitoring Cabang
+window.addEventListener('DOMContentLoaded', function() {
+    const mapEl = document.getElementById('monitoringBranchMap');
+    if (mapEl && typeof L !== 'undefined') {
+        const map = L.map('monitoringBranchMap', { scrollWheelZoom: false }).setView([-2.548926, 118.0148634], 5);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 18,
+            attribution: '&copy; OpenStreetMap | Bisolpin Academy'
+        }).addTo(map);
+
+        const markers = [];
+        Object.values(cabangDataMap).forEach(b => {
+            const lat = parseFloat(b.lat);
+            const lng = parseFloat(b.lng);
+            if (!lat || !lng) return;
+
+            const isAktif = (b.status_mitra === 'aktif');
+            const pinColor = isAktif ? '#10B981' : '#F59E0B';
+
+            const customIcon = L.divIcon({
+                className: 'custom-map-pin',
+                html: `
+                    <div style="background-color: ${pinColor}; border: 2.5px solid #ffffff; width: 30px; height: 30px; border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: #ffffff; font-size: 11px; cursor: pointer;">
+                        <i class="fa-solid fa-graduation-cap"></i>
+                    </div>
+                `,
+                iconSize: [30, 30],
+                iconAnchor: [15, 15],
+                popupAnchor: [0, -15]
+            });
+
+            const marker = L.marker([lat, lng], { icon: customIcon }).addTo(map);
+            markers.push(marker);
+
+            const popupContent = `
+                <div style="font-family: 'Plus Jakarta Sans', sans-serif; min-width: 210px; padding: 4px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px;">
+                        <span style="font-size: 10px; font-weight: 800; background: ${isAktif ? '#D1FAE5' : '#FEF3C7'}; color: ${isAktif ? '#065F46' : '#92400E'}; padding: 2px 7px; border-radius: 9999px; text-transform: uppercase;">
+                            ${isAktif ? 'Aktif' : 'Pending Review'}
+                        </span>
+                        <span style="font-size: 10px; font-weight: 800; color: #64748B;">${b.kode_cabang}</span>
+                    </div>
+                    <h4 style="margin: 0; font-size: 13px; font-weight: 800; color: #0F172A; line-height: 1.3;">${b.nama_cabang}</h4>
+                    <p style="margin: 3px 0 8px 0; font-size: 11px; color: #64748B;">${b.kota}, ${b.provinsi}</p>
+                    <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 6px 8px; margin-bottom: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px;">
+                        <div><span style="color: #64748B;">Siswa Aktif:</span> <strong style="color: #0F172A;">${b.total_siswa_aktif}</strong></div>
+                        <div><span style="color: #64748B;">Pendapatan:</span> <strong style="color: #0F172A;">${b.total_pendapatan}</strong></div>
+                    </div>
+                    <button type="button" onclick="openModalTinjau(cabangDataMap[${b.id}])" style="width: 100%; display: block; text-align: center; background: #1BA89C; color: #ffffff; border: none; padding: 6px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer;">
+                        Inspeksi Detail Cabang &rarr;
+                    </button>
+                </div>
+            `;
+            marker.bindPopup(popupContent);
+        });
+
+        if (markers.length > 0) {
+            const group = new L.featureGroup(markers);
+            map.fitBounds(group.getBounds().pad(0.25));
+        }
     }
 });
 

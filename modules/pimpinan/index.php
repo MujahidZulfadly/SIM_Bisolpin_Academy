@@ -128,6 +128,20 @@ $stmtProdukTerbaru = $db->query("
 ");
 $produkTerbaruList = $stmtProdukTerbaru->fetchAll();
 
+// 5b. Data Geospatial untuk Peta Sebaran Cabang
+$stmtMapCabang = $db->query("
+    SELECT c.id, c.kode_cabang, c.nama_cabang, c.kota, c.provinsi, c.alamat, c.telepon, c.status_mitra,
+           COALESCE(c.latitude, -5.147665) as lat,
+           COALESCE(c.longitude, 119.432732) as lng,
+           u.username as direktur_username,
+           (SELECT COUNT(*) FROM tabel_siswa s WHERE s.id_cabang = c.id AND s.status_belajar = 'aktif' AND s.is_archived = 0) as total_siswa,
+           (SELECT COUNT(*) FROM tabel_pegawai pg WHERE pg.id_cabang = c.id AND pg.status_aktif = 'aktif') as total_pegawai
+    FROM tabel_cabang c
+    LEFT JOIN users u ON u.id = c.id_direktur_cabang
+    ORDER BY c.status_mitra ASC, total_siswa DESC
+");
+$mapBranches = $stmtMapCabang->fetchAll(PDO::FETCH_ASSOC);
+
 // 6. Indeks Kepuasan Pengajaran Nasional (IKM Engine)
 ensure_table_evaluasi_mentor_exists($db);
 $avgIkm = 0.0;
@@ -411,6 +425,41 @@ require_once dirname(__DIR__, 2) . '/includes/topbar.php';
         </div>
     </div>
 
+    <!-- PETA INTERAKTIF: SEBARAN JARINGAN CABANG NASIONAL (Bento Col-12) -->
+    <div class="bento-card col-span-12 overflow-hidden p-0 border border-slate-200/90 shadow-sm">
+        <div class="p-5 bg-white border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center text-lg">
+                    <i class="fa-solid fa-map-location-dot"></i>
+                </div>
+                <div>
+                    <h3 class="text-base font-extrabold text-slate-800 flex items-center gap-2">
+                        <span>Peta Interaktif Sebaran Cabang Bisolpin</span>
+                        <span class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                            Live Geospatial Map
+                        </span>
+                    </h3>
+                    <p class="text-xs text-slate-400 mt-0.5">Pemetaan sebaran cabang operasional aktif, permohonan kemitraan, dan persebaran siswa di seluruh Indonesia.</p>
+                </div>
+            </div>
+            <!-- Quick Legend & Action -->
+            <div class="flex items-center gap-3 text-xs flex-wrap">
+                <span class="inline-flex items-center gap-1.5 font-bold text-slate-600">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-xs"></span> Cabang Aktif
+                </span>
+                <span class="inline-flex items-center gap-1.5 font-bold text-slate-600">
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-xs"></span> Pending Kemitraan
+                </span>
+                <a href="<?= base_url('modules/pimpinan/monitoring_cabang.php') ?>" class="btn-brand text-xs py-1.5 px-3 font-bold inline-flex items-center gap-1">
+                    <span>Detail Monitoring Cabang</span>
+                    <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                </a>
+            </div>
+        </div>
+        <!-- Map Canvas Container -->
+        <div id="bisolpinBranchMap" class="w-full h-[400px] z-10 bg-slate-100"></div>
+    </div>
+
     <!-- GRAFIK 1: Persebaran Siswa per Cabang (Bento Col-7) -->
     <div class="bento-card col-span-7">
         <div class="bento-card-header">
@@ -599,6 +648,69 @@ document.addEventListener('DOMContentLoaded', function() {
             cutout: '72%'
         }
     });
+
+    // 3. Peta Interaktif Sebaran Cabang (Leaflet JS)
+    const mapEl = document.getElementById('bisolpinBranchMap');
+    if (mapEl && typeof L !== 'undefined') {
+        const branchLocations = <?= json_encode($mapBranches) ?>;
+        const map = L.map('bisolpinBranchMap', { scrollWheelZoom: false }).setView([-2.548926, 118.0148634], 5);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 18,
+            attribution: '&copy; OpenStreetMap | Bisolpin Academy'
+        }).addTo(map);
+
+        const markers = [];
+        branchLocations.forEach(b => {
+            const lat = parseFloat(b.lat);
+            const lng = parseFloat(b.lng);
+            if (!lat || !lng) return;
+
+            const isAktif = (b.status_mitra === 'aktif');
+            const pinColor = isAktif ? '#10B981' : '#F59E0B';
+
+            const customIcon = L.divIcon({
+                className: 'custom-map-pin',
+                html: `
+                    <div style="background-color: ${pinColor}; border: 2.5px solid #ffffff; width: 30px; height: 30px; border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: #ffffff; font-size: 11px;">
+                        <i class="fa-solid fa-graduation-cap"></i>
+                    </div>
+                `,
+                iconSize: [30, 30],
+                iconAnchor: [15, 15],
+                popupAnchor: [0, -15]
+            });
+
+            const marker = L.marker([lat, lng], { icon: customIcon }).addTo(map);
+            markers.push(marker);
+
+            const popupContent = `
+                <div style="font-family: 'Plus Jakarta Sans', sans-serif; min-width: 210px; padding: 4px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px;">
+                        <span style="font-size: 10px; font-weight: 800; background: ${isAktif ? '#D1FAE5' : '#FEF3C7'}; color: ${isAktif ? '#065F46' : '#92400E'}; padding: 2px 7px; border-radius: 9999px; text-transform: uppercase;">
+                            ${isAktif ? 'Aktif' : 'Pending Review'}
+                        </span>
+                        <span style="font-size: 10px; font-weight: 800; color: #64748B;">${b.kode_cabang}</span>
+                    </div>
+                    <h4 style="margin: 0; font-size: 13px; font-weight: 800; color: #0F172A; line-height: 1.3;">${b.nama_cabang}</h4>
+                    <p style="margin: 3px 0 8px 0; font-size: 11px; color: #64748B;">${b.kota}, ${b.provinsi}</p>
+                    <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 6px 8px; margin-bottom: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px;">
+                        <div><span style="color: #64748B;">Siswa Aktif:</span> <strong style="color: #0F172A;">${b.total_siswa}</strong></div>
+                        <div><span style="color: #64748B;">SDM/Mentor:</span> <strong style="color: #0F172A;">${b.total_pegawai}</strong></div>
+                    </div>
+                    <a href="monitoring_cabang.php?switch_branch=${b.id}" style="display: block; text-align: center; background: #1BA89C; color: #ffffff; text-decoration: none; padding: 6px 10px; border-radius: 8px; font-size: 11px; font-weight: 700;">
+                        Tinjau Cabang Ini &rarr;
+                    </a>
+                </div>
+            `;
+            marker.bindPopup(popupContent);
+        });
+
+        if (markers.length > 0) {
+            const group = new L.featureGroup(markers);
+            map.fitBounds(group.getBounds().pad(0.25));
+        }
+    }
 });
 </script>
 

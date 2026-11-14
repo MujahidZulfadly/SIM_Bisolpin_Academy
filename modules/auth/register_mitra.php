@@ -142,9 +142,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $old['alamat_pribadi']
             ]);
 
+            // Kirim notifikasi sistem ke Pimpinan Pusat
+            push_notification(
+                'Permohonan Kemitraan Baru',
+                "Pendaftaran mitra baru untuk cabang {$old['nama_cabang']} ({$old['kota']}) menunggu review dan verifikasi Pimpinan Pusat.",
+                base_url('modules/pimpinan/verifikasi_mitra.php'),
+                null,
+                'pimpinan',
+                null,
+                'warning'
+            );
+
             $db->commit();
 
-            set_flash('success', 'Pengajuan kemitraan cabang <strong>' . e($old['nama_cabang']) . '</strong> berhasil dikirimkan! Tim Pimpinan Pusat akan memverifikasi berkas dan menghubungi Anda dalam 1-2 hari kerja.', 'Registrasi Kemitraan Berhasil!');
+            set_flash('success', 'Pengajuan kemitraan cabang <strong>' . e($old['nama_cabang']) . '</strong> berhasil dikirimkan! Dokumen kemitraan Anda akan ditinjau terlebih dahulu oleh Pimpinan Pusat, setelah disetujui maka Admin Sistem akan mengonfigurasi dan menyetujui pembuatan akun login cabang Anda.', 'Registrasi Kemitraan Berhasil!');
             redirect('modules/auth/login.php');
 
         } catch (\Throwable $e) {

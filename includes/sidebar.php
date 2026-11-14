@@ -49,7 +49,50 @@ $isActive = function(string $keyword) use ($activeScript): string {
         <!-- Navigation Menus based on Role -->
         <nav class="py-4 overflow-y-auto max-h-[calc(100vh-230px)] space-y-1">
 
-            <?php if ($currentRole === ROLE_PIMPINAN): ?>
+            <?php if ($currentRole === ROLE_ADMIN_SISTEM): ?>
+                <!-- 0. ROLE ADMIN SISTEM (IT Administrator) -->
+                <div class="nav-section-title">UTAMA</div>
+                <a href="<?= base_url('modules/admin_sistem/index.php') ?>" class="nav-item-link <?= $isActive('/admin_sistem/index') ?>">
+                    <i class="fa-solid fa-gauge-high w-5 text-center"></i>
+                    <span>Dashboard IT Admin</span>
+                </a>
+
+                <div class="nav-section-title">MANAJEMEN PENGGUNA & CABANG</div>
+                <a href="<?= base_url('modules/admin_sistem/users.php') ?>" class="nav-item-link <?= $isActive('/admin_sistem/users') ?>">
+                    <i class="fa-solid fa-users-gear w-5 text-center"></i>
+                    <span>Kelola Akun Pengguna</span>
+                </a>
+                <a href="<?= base_url('modules/admin_sistem/cabang.php') ?>" class="nav-item-link <?= $isActive('/admin_sistem/cabang') ?>">
+                    <i class="fa-solid fa-network-wired w-5 text-center"></i>
+                    <span>Master Cabang & Tenant</span>
+                </a>
+                <a href="<?= base_url('modules/admin_sistem/verifikasi_mitra.php') ?>" class="nav-item-link <?= $isActive('/admin_sistem/verifikasi_mitra') ?>">
+                    <i class="fa-solid fa-user-check w-5 text-center"></i>
+                    <span class="flex-1">Persetujuan Akun Mitra</span>
+                    <?php
+                    $pendingAdminCnt = (int)get_db()->query("SELECT COUNT(*) FROM tabel_cabang WHERE status_mitra = 'menunggu_aktivasi_admin'")->fetchColumn();
+                    if ($pendingAdminCnt > 0): ?>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-cyan-500 text-white animate-pulse">
+                            <?= $pendingAdminCnt ?>
+                        </span>
+                    <?php endif; ?>
+                </a>
+
+                <div class="nav-section-title">KEAMANAN & PEMELIHARAAN</div>
+                <a href="<?= base_url('modules/admin_sistem/audit_log.php') ?>" class="nav-item-link <?= $isActive('/admin_sistem/audit_log') ?>">
+                    <i class="fa-solid fa-shield-halved w-5 text-center"></i>
+                    <span>Audit Trail & Log Sistem</span>
+                </a>
+                <a href="<?= base_url('modules/admin_sistem/backup.php') ?>" class="nav-item-link <?= $isActive('/admin_sistem/backup') ?>">
+                    <i class="fa-solid fa-database w-5 text-center"></i>
+                    <span>Pencadangan Basis Data</span>
+                </a>
+                <a href="<?= base_url('modules/admin_sistem/pengaturan.php') ?>" class="nav-item-link <?= $isActive('/admin_sistem/pengaturan') ?>">
+                    <i class="fa-solid fa-sliders w-5 text-center"></i>
+                    <span>Konfigurasi & Pengumuman</span>
+                </a>
+
+            <?php elseif ($currentRole === ROLE_PIMPINAN): ?>
                 <!-- 1. ROLE PIMPINAN (Pusat / Super Admin) -->
                 <div class="nav-section-title">UTAMA</div>
                 <a href="<?= base_url('modules/pimpinan/index.php') ?>" class="nav-item-link <?= $isActive('/pimpinan/index') ?>">
@@ -64,7 +107,14 @@ $isActive = function(string $keyword) use ($activeScript): string {
                 <div class="nav-section-title">KEMITRAAN CABANG</div>
                 <a href="<?= base_url('modules/pimpinan/verifikasi_mitra.php') ?>" class="nav-item-link <?= $isActive('verifikasi_mitra') ?>">
                     <i class="fa-solid fa-handshake-angle w-5 text-center"></i>
-                    <span>Verifikasi Mitra Cabang</span>
+                    <span class="flex-1">Verifikasi Mitra Cabang</span>
+                    <?php
+                    $pendingPimpinanCnt = (int)get_db()->query("SELECT COUNT(*) FROM tabel_cabang WHERE status_mitra = 'pending_review'")->fetchColumn();
+                    if ($pendingPimpinanCnt > 0): ?>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white animate-pulse">
+                            <?= $pendingPimpinanCnt ?>
+                        </span>
+                    <?php endif; ?>
                 </a>
 
                 <div class="nav-section-title">AUDIT NASIONAL</div>

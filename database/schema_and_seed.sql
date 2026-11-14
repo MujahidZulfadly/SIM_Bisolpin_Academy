@@ -401,6 +401,25 @@ CREATE TABLE `tabel_pembayaran` (
   CONSTRAINT `fk_bayar_layanan` FOREIGN KEY (`id_layanan`) REFERENCES `tabel_layanan` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ------------------------------------------------------------------------------
+-- 13. TABEL TOKEN PEMULIHAN SANDI (password_resets)
+-- ------------------------------------------------------------------------------
+CREATE TABLE `password_resets` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `email` VARCHAR(150) NOT NULL,
+  `token` VARCHAR(128) NOT NULL,
+  `token_hash` VARCHAR(64) NOT NULL,
+  `expires_at` DATETIME NOT NULL,
+  `is_used` TINYINT(1) NOT NULL DEFAULT 0,
+  `ip_address` VARCHAR(50) NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_reset_token` (`token_hash`),
+  INDEX `idx_reset_user` (`user_id`),
+  INDEX `idx_reset_expires` (`expires_at`),
+  CONSTRAINT `fk_reset_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;
 
 

@@ -179,3 +179,69 @@ function confirmAction(url, title = 'Konfirmasi Aksi', text = 'Apakah Anda yakin
     }
 }
 
+/**
+ * Global Topbar Notification Bell & Dropdown Handler
+ */
+document.addEventListener('DOMContentLoaded', function () {
+    const btnNotif = document.getElementById('btn-toggle-notif');
+    const menuNotif = document.getElementById('notif-dropdown-menu');
+    const containerNotif = document.getElementById('topbar-notif-container');
+
+    if (btnNotif && menuNotif) {
+        btnNotif.addEventListener('click', function (e) {
+            e.stopPropagation();
+            menuNotif.classList.toggle('hidden');
+        });
+
+        document.addEventListener('click', function (e) {
+            if (containerNotif && !containerNotif.contains(e.target)) {
+                menuNotif.classList.add('hidden');
+            }
+        });
+    }
+});
+
+function markNotificationRead(notifId) {
+    if (!notifId) return;
+    const formData = new FormData();
+    formData.append('action', 'mark_read');
+    formData.append('id', notifId);
+    
+    const ajaxUrl = window.location.pathname.includes('/SIM_bisolpin_academy/') 
+        ? '/SIM_bisolpin_academy/core/ajax_notifikasi.php'
+        : '/core/ajax_notifikasi.php';
+
+    fetch(ajaxUrl, {
+        method: 'POST',
+        body: formData
+    }).then(res => res.json()).then(data => {
+        if (data.success && data.unread_count === 0) {
+            const badge = document.getElementById('notif-badge-pill');
+            if (badge) badge.remove();
+        }
+    }).catch(err => console.error('Gagal update notifikasi:', err));
+}
+
+function markAllNotificationsAsRead() {
+    const formData = new FormData();
+    formData.append('action', 'mark_all_read');
+
+    const ajaxUrl = window.location.pathname.includes('/SIM_bisolpin_academy/') 
+        ? '/SIM_bisolpin_academy/core/ajax_notifikasi.php'
+        : '/core/ajax_notifikasi.php';
+
+    fetch(ajaxUrl, {
+        method: 'POST',
+        body: formData
+    }).then(res => res.json()).then(data => {
+        if (data.success) {
+            const badge = document.getElementById('notif-badge-pill');
+            if (badge) badge.remove();
+            const countBadge = document.getElementById('notif-count-badge');
+            if (countBadge) countBadge.remove();
+            document.querySelectorAll('#notif-items-list .bg-teal-50\\/20').forEach(el => el.classList.remove('bg-teal-50/20'));
+            document.querySelectorAll('#notif-items-list .bg-brand-500').forEach(el => el.remove());
+        }
+    }).catch(err => console.error('Gagal mark all read:', err));
+}
+

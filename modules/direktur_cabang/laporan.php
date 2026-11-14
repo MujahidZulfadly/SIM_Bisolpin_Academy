@@ -85,6 +85,152 @@ if ($jenisLaporan === 'siswa') {
     $jenisLaporan = 'pegawai';
 }
 
+// Penanganan Ekspor Excel untuk Direktur Cabang
+if (isset($_GET['export']) && $_GET['export'] === 'excel') {
+    $metadata = [
+        'Nama Cabang'     => $cabang['nama_cabang'] ?? 'Bisolpin Cabang',
+        'Kode Cabang'     => $cabang['kode_cabang'] ?? '-',
+        'Direktur Cabang' => $cabang['nama_direktur'] ?? 'Direktur Cabang',
+        'Total Data'      => count($dataReport) . ' Baris',
+        'Waktu Ekspor'    => date('d-m-Y H:i') . ' WITA'
+    ];
+
+    if ($jenisLaporan === 'siswa') {
+        $columns = [
+            'no'             => ['label' => 'No', 'type' => 'center', 'width' => 45],
+            'nis'            => ['label' => 'NIS', 'type' => 'text', 'width' => 120],
+            'nama_lengkap'   => ['label' => 'Nama Siswa', 'type' => 'text', 'width' => 180],
+            'nama_layanan'   => ['label' => 'Program Kursus', 'type' => 'text', 'width' => 180],
+            'nama_mentor'    => ['label' => 'Mentor', 'type' => 'text', 'width' => 160],
+            'sekolah'        => ['label' => 'Asal Sekolah', 'type' => 'text', 'width' => 170],
+            'no_hp'          => ['label' => 'No. HP', 'type' => 'text', 'width' => 130],
+            'status_belajar' => ['label' => 'Status Belajar', 'type' => 'badge', 'width' => 110],
+            'status_bayar'   => ['label' => 'Status Bayar', 'type' => 'badge', 'width' => 110],
+            'progres'        => ['label' => 'Progres (%)', 'type' => 'number', 'width' => 90]
+        ];
+        $rows = [];
+        $no = 1;
+        foreach ($dataReport as $r) {
+            $rows[] = [
+                'no'             => $no++,
+                'nis'            => $r['nis_bisolpin'],
+                'nama_lengkap'   => $r['nama_lengkap'],
+                'nama_layanan'   => $r['nama_layanan'],
+                'nama_mentor'    => $r['nama_mentor'] ?: 'Belum diplot',
+                'sekolah'        => $r['asal_sekolah_instansi'] ?: ($r['nama_sekolah'] ?? '-'),
+                'no_hp'          => $r['no_hp_siswa'] ?: '-',
+                'status_belajar' => $r['status_belajar'],
+                'status_bayar'   => $r['status_pembayaran'] ?? 'belum_bayar',
+                'progres'        => (float)($r['persentase_progres'] ?? 0)
+            ];
+        }
+        $filename = 'laporan_siswa_' . preg_replace('/[^a-zA-Z0-9]/', '_', strtolower($cabang['kode_cabang'] ?? 'cabang')) . '_' . date('Ymd_His');
+        export_to_excel($filename, 'LAPORAN DATA DAN PROGRES BELAJAR SISWA', $columns, $rows, $metadata);
+
+    } elseif ($jenisLaporan === 'presensi') {
+        $columns = [
+            'no'           => ['label' => 'No', 'type' => 'center', 'width' => 45],
+            'tanggal'      => ['label' => 'Tanggal KBM', 'type' => 'date', 'width' => 110],
+            'jam_masuk'    => ['label' => 'Jam Masuk', 'type' => 'center', 'width' => 90],
+            'jam_keluar'   => ['label' => 'Jam Keluar', 'type' => 'center', 'width' => 90],
+            'nis'          => ['label' => 'NIS', 'type' => 'text', 'width' => 120],
+            'nama_siswa'   => ['label' => 'Nama Siswa', 'type' => 'text', 'width' => 180],
+            'judul_modul'  => ['label' => 'Materi / Modul', 'type' => 'text', 'width' => 200],
+            'status'       => ['label' => 'Status Kehadiran', 'type' => 'badge', 'width' => 120],
+            'diinput_oleh' => ['label' => 'Dicatat Oleh', 'type' => 'center', 'width' => 120]
+        ];
+        $rows = [];
+        $no = 1;
+        foreach ($dataReport as $r) {
+            $rows[] = [
+                'no'           => $no++,
+                'tanggal'      => $r['tanggal_absensi'],
+                'jam_masuk'    => !empty($r['jam_masuk']) ? date('H:i', strtotime($r['jam_masuk'])) : '-',
+                'jam_keluar'   => !empty($r['jam_keluar']) ? date('H:i', strtotime($r['jam_keluar'])) : '-',
+                'nis'          => $r['nis_bisolpin'],
+                'nama_siswa'   => $r['nama_siswa'],
+                'judul_modul'  => $r['judul_modul'] ?: 'Pertemuan Terjadwal',
+                'status'       => $r['status_kehadiran'],
+                'diinput_oleh' => $r['diinput_oleh_user'] ?: 'Sistem'
+            ];
+        }
+        $filename = 'laporan_presensi_kbm_' . preg_replace('/[^a-zA-Z0-9]/', '_', strtolower($cabang['kode_cabang'] ?? 'cabang')) . '_' . date('Ymd_His');
+        export_to_excel($filename, 'LAPORAN REKAPITULASI PRESENSI KBM SISWA', $columns, $rows, $metadata);
+
+    } elseif ($jenisLaporan === 'aset') {
+        $columns = [
+            'no'               => ['label' => 'No', 'type' => 'center', 'width' => 45],
+            'kode_aset'        => ['label' => 'Kode Aset', 'type' => 'text', 'width' => 120],
+            'nama_aset'        => ['label' => 'Nama Sarana / Fasilitas', 'type' => 'text', 'width' => 200],
+            'kategori'         => ['label' => 'Kategori', 'type' => 'center', 'width' => 120],
+            'lokasi'           => ['label' => 'Lokasi Ruangan', 'type' => 'text', 'width' => 140],
+            'jumlah_unit'      => ['label' => 'Jumlah Unit', 'type' => 'number', 'width' => 90],
+            'kondisi'          => ['label' => 'Kondisi Fisik', 'type' => 'badge', 'width' => 110],
+            'tanggal_perolehan'=> ['label' => 'Tgl Perolehan', 'type' => 'date', 'width' => 110],
+            'nilai_perolehan'  => ['label' => 'Nilai Perolehan', 'type' => 'currency', 'width' => 130],
+            'penanggung_jawab' => ['label' => 'Penanggung Jawab', 'type' => 'text', 'width' => 160]
+        ];
+        $rows = [];
+        $no = 1;
+        $totalAsetVal = 0;
+        foreach ($dataReport as $r) {
+            $nilai = (float)($r['nilai_perolehan'] ?? 0);
+            $totalAsetVal += $nilai;
+            $rows[] = [
+                'no'               => $no++,
+                'kode_aset'        => $r['kode_aset'],
+                'nama_aset'        => $r['nama_aset'],
+                'kategori'         => strtoupper(str_replace('_', ' ', $r['kategori_aset'])),
+                'lokasi'           => $r['lokasi_penempatan'],
+                'jumlah_unit'      => (int)$r['jumlah_unit'],
+                'kondisi'          => $r['kondisi'],
+                'tanggal_perolehan'=> $r['tanggal_perolehan'],
+                'nilai_perolehan'  => $nilai,
+                'penanggung_jawab' => $r['nama_penanggung_jawab'] ?: '-'
+            ];
+        }
+        $summary = [
+            'label'   => 'TOTAL NILAI INVENTARIS',
+            'colspan' => 8,
+            'values'  => [
+                'nilai_perolehan' => $totalAsetVal
+            ]
+        ];
+        $filename = 'laporan_aset_' . preg_replace('/[^a-zA-Z0-9]/', '_', strtolower($cabang['kode_cabang'] ?? 'cabang')) . '_' . date('Ymd_His');
+        export_to_excel($filename, 'LAPORAN INVENTARIS FASILITAS & SARANA PRASARANA CABANG', $columns, $rows, $metadata, $summary);
+
+    } else {
+        $columns = [
+            'no'             => ['label' => 'No', 'type' => 'center', 'width' => 45],
+            'nip'            => ['label' => 'NIP', 'type' => 'text', 'width' => 120],
+            'nama_lengkap'   => ['label' => 'Nama Pegawai', 'type' => 'text', 'width' => 190],
+            'jabatan_role'   => ['label' => 'Jabatan / Peran', 'type' => 'center', 'width' => 110],
+            'spesialisasi'   => ['label' => 'Spesialisasi / Bidang', 'type' => 'text', 'width' => 150],
+            'email'          => ['label' => 'Email', 'type' => 'text', 'width' => 180],
+            'no_hp'          => ['label' => 'No. Telepon / WA', 'type' => 'text', 'width' => 130],
+            'status'         => ['label' => 'Status Kerja', 'type' => 'badge', 'width' => 100],
+            'tanggal_masuk'  => ['label' => 'Tgl Bergabung', 'type' => 'date', 'width' => 110]
+        ];
+        $rows = [];
+        $no = 1;
+        foreach ($dataReport as $r) {
+            $rows[] = [
+                'no'             => $no++,
+                'nip'            => $r['nip_pegawai'],
+                'nama_lengkap'   => $r['nama_lengkap'],
+                'jabatan_role'   => strtoupper($r['jabatan_role']),
+                'spesialisasi'   => $r['spesialisasi_mentor'] ?: ($r['spesialisasi_mapel'] ?? '-'),
+                'email'          => $r['email'] ?: '-',
+                'no_hp'          => $r['no_telepon'] ?: '-',
+                'status'         => $r['status_aktif'],
+                'tanggal_masuk'  => $r['tanggal_masuk'] ?? date('Y-m-d', strtotime($r['created_at']))
+            ];
+        }
+        $filename = 'laporan_pegawai_' . preg_replace('/[^a-zA-Z0-9]/', '_', strtolower($cabang['kode_cabang'] ?? 'cabang')) . '_' . date('Ymd_His');
+        export_to_excel($filename, 'LAPORAN DATA SDM, PEGAWAI & MENTOR CABANG', $columns, $rows, $metadata);
+    }
+}
+
 require_once dirname(__DIR__, 2) . '/includes/header.php';
 require_once dirname(__DIR__, 2) . '/includes/sidebar.php';
 require_once dirname(__DIR__, 2) . '/includes/topbar.php';
@@ -105,6 +251,11 @@ require_once dirname(__DIR__, 2) . '/includes/topbar.php';
             <option value="aset" <?= $jenisLaporan === 'aset' ? 'selected' : '' ?>>🛋️ Laporan Inventaris & Sarpras</option>
             <option value="pegawai" <?= $jenisLaporan === 'pegawai' ? 'selected' : '' ?>>👥 Laporan Data Pegawai & Mentor</option>
         </select>
+
+        <a href="?jenis=<?= urlencode($jenisLaporan) ?>&export=excel" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center gap-1.5 transition-all">
+            <i class="fa-solid fa-file-excel"></i>
+            <span>Unduh Excel (.xls)</span>
+        </a>
 
         <button onclick="window.print()" class="btn-brand text-xs py-2 px-5 shadow-lg shadow-brand-500/20">
             <i class="fa-solid fa-print"></i>

@@ -201,6 +201,76 @@ $pegawaiList = $stmtPegawai->fetchAll();
 $countAset = (int)$db->query("SELECT COUNT(*) FROM tabel_aset")->fetchColumn() + 1;
 $suggestedKodeAset = sprintf("AST-MKS-%03d", $countAset);
 
+// EKSPOR DATA INVENTARIS ASET KE EXCEL
+if (isset($_GET['export']) && $_GET['export'] === 'excel') {
+    $stmtCabang = $db->prepare("SELECT * FROM tabel_cabang WHERE id = ?");
+    $stmtCabang->execute([$branchId]);
+    $cabang = $stmtCabang->fetch();
+
+    $columns = [
+        'no'               => ['label' => 'No', 'type' => 'center', 'width' => 45],
+        'kode_aset'        => ['label' => 'Kode Aset', 'type' => 'text', 'width' => 120],
+        'nama_aset'        => ['label' => 'Nama Sarana / Fasilitas', 'type' => 'text', 'width' => 200],
+        'kategori'         => ['label' => 'Kategori Aset', 'type' => 'center', 'width' => 130],
+        'lokasi'           => ['label' => 'Lokasi Penempatan', 'type' => 'text', 'width' => 140],
+        'jumlah_unit'      => ['label' => 'Unit', 'type' => 'number', 'width' => 70],
+        'kondisi'          => ['label' => 'Kondisi Fisik', 'type' => 'badge', 'width' => 110],
+        'tanggal_perolehan'=> ['label' => 'Tgl Perolehan', 'type' => 'date', 'width' => 110],
+        'nilai_perolehan'  => ['label' => 'Nilai Perolehan', 'type' => 'currency', 'width' => 130],
+        'penanggung_jawab' => ['label' => 'Penanggung Jawab', 'type' => 'text', 'width' => 160],
+        'catatan'          => ['label' => 'Catatan Pemeliharaan', 'type' => 'text', 'width' => 200]
+    ];
+
+    $rows = [];
+    $no = 1;
+    $totalNilai = 0;
+    $totalUnit = 0;
+    foreach ($asetList as $a) {
+        $nilai = (float)($a['nilai_perolehan'] ?? 0);
+        $unit = (int)($a['jumlah_unit'] ?? 1);
+        $totalNilai += $nilai;
+        $totalUnit += $unit;
+
+        $rows[] = [
+            'no'               => $no++,
+            'kode_aset'        => $a['kode_aset'],
+            'nama_aset'        => $a['nama_aset'],
+            'kategori'         => strtoupper(str_replace('_', ' ', $a['kategori_aset'])),
+            'lokasi'           => $a['lokasi_penempatan'],
+            'jumlah_unit'      => $unit,
+            'kondisi'          => $a['kondisi'],
+            'tanggal_perolehan'=> $a['tanggal_perolehan'],
+            'nilai_perolehan'  => $nilai,
+            'penanggung_jawab' => $a['nama_penanggung_jawab'] ?: '-',
+            'catatan'          => $a['catatan_maintenance'] ?: '-'
+        ];
+    }
+
+    $metadata = [
+        'Nama Cabang'       => $cabang['nama_cabang'] ?? 'Bisolpin Cabang',
+        'Kode Cabang'       => $cabang['kode_cabang'] ?? '-',
+        'Filter Kategori'   => !empty($filterKategori) ? ucfirst(str_replace('_', ' ', $filterKategori)) : 'Semua Kategori',
+        'Filter Kondisi'    => !empty($filterKondisi) ? ucfirst(str_replace('_', ' ', $filterKondisi)) : 'Semua Kondisi',
+        'Kata Kunci Cari'   => !empty($search) ? $search : '-',
+        'Total Aset'        => count($rows) . " Aset ({$totalUnit} Unit)",
+        'Total Nilai Aset'  => format_rupiah($totalNilai),
+        'Waktu Ekspor'      => date('d-m-Y H:i') . ' WITA'
+    ];
+
+    $summary = [
+        'label'   => 'TOTAL UNIT & NILAI ASET',
+        'colspan' => 5,
+        'values'  => [
+            'jumlah_unit'     => $totalUnit,
+            'nilai_perolehan' => $totalNilai
+        ]
+    ];
+
+    $filename = 'inventaris_aset_' . preg_replace('/[^a-zA-Z0-9]/', '_', strtolower($cabang['kode_cabang'] ?? 'cabang')) . '_' . date('Ymd_His');
+
+    export_to_excel($filename, 'INVENTARIS FASILITAS & SARANA PRASARANA CABANG', $columns, $rows, $metadata, $summary);
+}
+
 require_once dirname(__DIR__, 2) . '/includes/header.php';
 require_once dirname(__DIR__, 2) . '/includes/sidebar.php';
 require_once dirname(__DIR__, 2) . '/includes/topbar.php';
@@ -221,7 +291,11 @@ require_once dirname(__DIR__, 2) . '/includes/topbar.php';
         </p>
     </div>
 
-    <div>
+    <div class="flex flex-wrap items-center gap-2.5">
+        <a href="?kategori=<?= urlencode($filterKategori) ?>&kondisi=<?= urlencode($filterKondisi) ?>&q=<?= urlencode($search) ?>&export=excel" class="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm shadow-emerald-600/20 flex items-center gap-1.5 transition-all">
+            <i class="fa-solid fa-file-excel text-xs"></i>
+            <span>Ekspor Excel (.xls)</span>
+        </a>
         <button onclick="openModal('modalTambahAset')" class="btn-brand text-xs py-2.5 shadow-md shadow-brand-500/20">
             <i class="fa-solid fa-plus text-xs"></i>
             <span>Tambah Aset Baru</span>

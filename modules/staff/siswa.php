@@ -418,6 +418,73 @@ $tahunNow = date('Y');
 $countNis = (int)$db->query("SELECT COUNT(*) FROM tabel_siswa")->fetchColumn() + 1;
 $suggestedNis = sprintf("NIS-%s-%04d", $tahunNow, $countNis);
 
+// EKSPOR DATA INDUK SISWA KE EXCEL
+if (isset($_GET['export']) && $_GET['export'] === 'excel') {
+    $stmtCabang = $db->prepare("SELECT * FROM tabel_cabang WHERE id = ?");
+    $stmtCabang->execute([$branchId]);
+    $cabang = $stmtCabang->fetch();
+
+    $columns = [
+        'no'             => ['label' => 'No', 'type' => 'center', 'width' => 45],
+        'nis'            => ['label' => 'NIS Bisolpin', 'type' => 'text', 'width' => 120],
+        'nama_lengkap'   => ['label' => 'Nama Lengkap Siswa', 'type' => 'text', 'width' => 190],
+        'umur'           => ['label' => 'Umur', 'type' => 'center', 'width' => 60],
+        'jenjang'        => ['label' => 'Jenjang', 'type' => 'center', 'width' => 70],
+        'kelas'          => ['label' => 'Kelas', 'type' => 'center', 'width' => 70],
+        'sekolah'        => ['label' => 'Asal Sekolah / Instansi', 'type' => 'text', 'width' => 180],
+        'nama_layanan'   => ['label' => 'Program Kursus', 'type' => 'text', 'width' => 180],
+        'mentor'         => ['label' => 'Mentor Pembimbing', 'type' => 'text', 'width' => 160],
+        'no_hp_siswa'    => ['label' => 'No. HP Siswa', 'type' => 'text', 'width' => 130],
+        'nama_ortu'      => ['label' => 'Nama Orang Tua / Wali', 'type' => 'text', 'width' => 170],
+        'no_wa_ortu'     => ['label' => 'No. WA Ortu', 'type' => 'text', 'width' => 130],
+        'alamat'         => ['label' => 'Alamat Domisili', 'type' => 'text', 'width' => 220],
+        'progres'        => ['label' => 'Progres (%)', 'type' => 'number', 'width' => 80],
+        'sesi'           => ['label' => 'Pertemuan', 'type' => 'center', 'width' => 80],
+        'status_belajar' => ['label' => 'Status Belajar', 'type' => 'badge', 'width' => 100],
+        'status_bayar'   => ['label' => 'Status Finansial', 'type' => 'badge', 'width' => 110],
+        'tanggal_daftar' => ['label' => 'Tgl Daftar', 'type' => 'date', 'width' => 100]
+    ];
+
+    $rows = [];
+    $no = 1;
+    foreach ($siswaList as $s) {
+        $rows[] = [
+            'no'             => $no++,
+            'nis'            => $s['nis_bisolpin'],
+            'nama_lengkap'   => $s['nama_lengkap'],
+            'umur'           => $s['umur'] ?? '-',
+            'jenjang'        => $s['jenjang'] ?? '-',
+            'kelas'          => $s['kelas'] ?? '-',
+            'sekolah'        => $s['asal_sekolah_instansi'] ?: ($s['nama_sekolah'] ?: '-'),
+            'nama_layanan'   => $s['nama_layanan'],
+            'mentor'         => $s['nama_mentor'] ?: 'Belum diplot',
+            'no_hp_siswa'    => $s['no_hp_siswa'] ?: '-',
+            'nama_ortu'      => $s['nama_orang_tua'] ?: '-',
+            'no_wa_ortu'     => $s['no_wa_ortu'] ?: ($s['no_hp_orang_tua'] ?: '-'),
+            'alamat'         => $s['alamat'] ?: '-',
+            'progres'        => (float)($s['persentase_progres'] ?? 0),
+            'sesi'           => (int)($s['pertemuan_terakhir_diikuti'] ?? 0),
+            'status_belajar' => $s['status_belajar'],
+            'status_bayar'   => $s['status_pembayaran'],
+            'tanggal_daftar' => $s['tanggal_daftar'] ?? date('Y-m-d', strtotime($s['created_at']))
+        ];
+    }
+
+    $metadata = [
+        'Nama Cabang'       => $cabang['nama_cabang'] ?? 'Bisolpin Cabang',
+        'Kode Cabang'       => $cabang['kode_cabang'] ?? '-',
+        'Filter Status'     => !empty($filterStatus) ? ucfirst($filterStatus) : 'Semua Status Belajar',
+        'Filter Finansial'  => !empty($filterPayment) ? ucfirst($filterPayment) : 'Semua Status Pembayaran',
+        'Kata Kunci Cari'   => !empty($search) ? $search : '-',
+        'Total Siswa'       => count($rows) . ' Siswa',
+        'Waktu Ekspor'      => date('d-m-Y H:i') . ' WITA'
+    ];
+
+    $filename = 'data_induk_siswa_' . preg_replace('/[^a-zA-Z0-9]/', '_', strtolower($cabang['kode_cabang'] ?? 'cabang')) . '_' . date('Ymd_His');
+
+    export_to_excel($filename, 'DATA INDUK KESISWAAN & PROGRES BELAJAR CABANG', $columns, $rows, $metadata);
+}
+
 require_once dirname(__DIR__, 2) . '/includes/header.php';
 require_once dirname(__DIR__, 2) . '/includes/sidebar.php';
 require_once dirname(__DIR__, 2) . '/includes/topbar.php';
@@ -438,7 +505,11 @@ require_once dirname(__DIR__, 2) . '/includes/topbar.php';
         </p>
     </div>
 
-    <div>
+    <div class="flex flex-wrap items-center gap-2.5">
+        <a href="?status=<?= urlencode($filterStatus) ?>&layanan=<?= urlencode((string)$filterLayanan) ?>&pembayaran=<?= urlencode($filterPayment) ?>&q=<?= urlencode($search) ?>&export=excel" class="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm shadow-emerald-600/20 flex items-center gap-1.5 transition-all">
+            <i class="fa-solid fa-file-excel text-xs"></i>
+            <span>Ekspor Excel (.xls)</span>
+        </a>
         <button onclick="openModal('modalTambahSiswa')" class="btn-brand text-xs py-2.5 shadow-md shadow-brand-500/20">
             <i class="fa-solid fa-user-plus text-xs"></i>
             <span>Daftar Siswa Baru</span>

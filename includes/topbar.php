@@ -9,13 +9,22 @@ require_once dirname(__DIR__) . '/config/app.php';
 require_once dirname(__DIR__) . '/core/auth.php';
 require_once dirname(__DIR__) . '/core/helpers.php';
 require_once dirname(__DIR__) . '/core/attendance_ceklok.php';
+require_once dirname(__DIR__) . '/core/notifications.php';
 
 $user = auth_user() ?? [];
 $role = auth_role() ?? '';
 $activeBranchId = get_active_branch_id();
 $activeBranchName = get_active_branch_name();
-$isNationalRole = in_array($role, [ROLE_PIMPINAN, ROLE_BAK], true);
+$isNationalRole = in_array($role, [ROLE_ADMIN_SISTEM, ROLE_PIMPINAN, ROLE_BAK], true);
 $allBranches = $isNationalRole ? get_all_branches(false) : [];
+
+// Notifikasi Pengguna Terpadu
+$topbarUserId = (int)($user['id'] ?? 0);
+$userNotifications = get_user_notifications($topbarUserId, $role, $activeBranchId, 8);
+$unreadCount = 0;
+foreach ($userNotifications as $un) {
+    if ((int)$un['is_read'] === 0) $unreadCount++;
+}
 
 // Cek status Ceklok untuk personil pegawai
 $topbarPegawai = is_eligible_for_ceklok($role) ? get_logged_in_pegawai() : null;
@@ -96,6 +105,86 @@ $topbarAttendance = ($topbarPegawai && !empty($topbarPegawai['id'])) ? get_today
                 <?php endif; ?>
             <?php endif; ?>
 
+            <!-- Notification Bell Dropdown Container -->
+            <div class="relative" id="topbar-notif-container">
+                <button type="button" id="btn-toggle-notif" class="relative w-9 h-9 rounded-xl border border-slate-200 hover:border-brand-300 hover:bg-brand-50/50 text-slate-600 hover:text-brand-600 flex items-center justify-center transition-all shadow-xs" title="Notifikasi Sistem">
+                    <i class="fa-regular fa-bell text-sm"></i>
+                    <?php if ($unreadCount > 0): ?>
+                        <span id="notif-badge-pill" class="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center shadow-sm animate-pulse">
+                            <?= $unreadCount > 9 ? '9+' : $unreadCount ?>
+                        </span>
+                    <?php endif; ?>
+                </button>
+
+                <!-- Dropdown Menu Box -->
+                <div id="notif-dropdown-menu" class="hidden absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200/90 py-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+                    <!-- Header -->
+                    <div class="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-bell text-brand-600 text-xs"></i>
+                            <span class="text-xs font-bold text-slate-800">Notifikasi</span>
+                            <?php if ($unreadCount > 0): ?>
+                                <span id="notif-count-badge" class="px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[10px] font-bold">
+                                    <?= $unreadCount ?> baru
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                        <button type="button" onclick="markAllNotificationsAsRead()" class="text-[11px] font-bold text-brand-600 hover:text-brand-700 hover:underline">
+                            Tandai semua dibaca
+                        </button>
+                    </div>
+
+                    <!-- Notification List -->
+                    <div class="max-h-[350px] overflow-y-auto divide-y divide-slate-100" id="notif-items-list">
+                        <?php if (empty($userNotifications)): ?>
+                            <div class="py-8 px-4 text-center">
+                                <div class="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2 text-sm">
+                                    <i class="fa-regular fa-bell-slash"></i>
+                                </div>
+                                <p class="text-xs text-slate-500 font-medium">Belum ada notifikasi baru untuk Anda</p>
+                            </div>
+                        <?php else: ?>
+                            <?php foreach ($userNotifications as $notif): 
+                                $isUnread = (int)$notif['is_read'] === 0;
+                                $nType = $notif['tipe'] ?? 'info';
+                                $iconBg = 'bg-cyan-50 text-cyan-600 border-cyan-200';
+                                $iconFa = 'fa-circle-info';
+                                if ($nType === 'warning') {
+                                    $iconBg = 'bg-amber-50 text-amber-600 border-amber-200';
+                                    $iconFa = 'fa-triangle-exclamation';
+                                } elseif ($nType === 'success') {
+                                    $iconBg = 'bg-emerald-50 text-emerald-600 border-emerald-200';
+                                    $iconFa = 'fa-circle-check';
+                                } elseif ($nType === 'danger') {
+                                    $iconBg = 'bg-rose-50 text-rose-600 border-rose-200';
+                                    $iconFa = 'fa-circle-exclamation';
+                                }
+                            ?>
+                                <a href="<?= !empty($notif['link']) && $notif['link'] !== '#' ? e($notif['link']) : 'javascript:void(0)' ?>" 
+                                   onclick="markNotificationRead(<?= is_numeric($notif['id']) ? (int)$notif['id'] : 0 ?>)"
+                                   class="block px-4 py-3 hover:bg-slate-50/80 transition-colors <?= $isUnread ? 'bg-teal-50/20' : '' ?>">
+                                    <div class="flex items-start gap-3">
+                                        <div class="w-8 h-8 rounded-xl <?= $iconBg ?> border flex items-center justify-center text-xs shrink-0 mt-0.5 shadow-2xs">
+                                            <i class="fa-solid <?= $iconFa ?>"></i>
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center justify-between gap-1 mb-0.5">
+                                                <h5 class="text-xs font-bold text-slate-800 truncate"><?= e($notif['judul']) ?></h5>
+                                                <span class="text-[10px] text-slate-400 whitespace-nowrap"><?= format_waktu_relatif($notif['created_at']) ?></span>
+                                            </div>
+                                            <p class="text-[11px] text-slate-600 leading-snug line-clamp-2"><?= e($notif['pesan']) ?></p>
+                                        </div>
+                                        <?php if ($isUnread): ?>
+                                            <span class="w-2 h-2 rounded-full bg-brand-500 shrink-0 mt-2"></span>
+                                        <?php endif; ?>
+                                    </div>
+                                </a>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
             <!-- User Menu Pill -->
             <div class="flex items-center gap-3 pl-2 border-l border-slate-200">
                 <div class="w-9 h-9 rounded-xl bg-gradient-brand text-white flex items-center justify-center font-bold text-sm shadow-sm">
@@ -114,4 +203,60 @@ $topbarAttendance = ($topbarPegawai && !empty($topbarPegawai['id'])) ? get_today
 
     <!-- Main Content Body -->
     <main class="content-body flex-1">
+        <?php
+        $globalAnnouncement = get_active_system_announcement();
+        if ($globalAnnouncement):
+            $annType = $globalAnnouncement['tipe'] ?? 'info';
+            $annBg = 'bg-teal-50/95 border-teal-200 text-teal-900';
+            $annIcon = 'fa-bullhorn text-teal-600';
+            $annBadge = 'bg-teal-100 text-teal-800 border-teal-200';
+
+            if ($annType === 'warning') {
+                $annBg = 'bg-amber-50/95 border-amber-200 text-amber-900';
+                $annIcon = 'fa-triangle-exclamation text-amber-600';
+                $annBadge = 'bg-amber-100 text-amber-800 border-amber-200';
+            } elseif ($annType === 'danger') {
+                $annBg = 'bg-rose-50/95 border-rose-200 text-rose-900';
+                $annIcon = 'fa-circle-exclamation text-rose-600';
+                $annBadge = 'bg-rose-100 text-rose-800 border-rose-200';
+            } elseif ($annType === 'success') {
+                $annBg = 'bg-emerald-50/95 border-emerald-200 text-emerald-900';
+                $annIcon = 'fa-circle-check text-emerald-600';
+                $annBadge = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+            }
+
+            $scopeLabel = 'Pengumuman Pusat';
+            $scopeIcon = 'fa-tower-broadcast';
+            if (!empty($globalAnnouncement['nama_cabang'])) {
+                $scopeLabel = 'Cabang ' . $globalAnnouncement['nama_cabang'];
+                $scopeIcon = 'fa-building-circle-check';
+            } elseif (!empty($globalAnnouncement['target_role']) && $globalAnnouncement['target_role'] !== 'semua') {
+                $scopeLabel = 'Khusus ' . ucfirst(str_replace('_', ' ', $globalAnnouncement['target_role']));
+                $scopeIcon = 'fa-user-tag';
+            }
+        ?>
+        <!-- Banner Pengumuman Global Sistem (Ditampilkan di Seluruh Dashboard Pengguna) -->
+        <div class="system-announcement-banner mb-6 p-4 rounded-2xl border <?= $annBg ?> shadow-sm flex items-start justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div class="flex items-start gap-3.5">
+                <div class="w-10 h-10 rounded-xl bg-white/80 shadow-xs flex items-center justify-center shrink-0 mt-0.5">
+                    <i class="fa-solid <?= $annIcon ?> text-lg"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2 mb-1 flex-wrap">
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border <?= $annBadge ?>">
+                            <i class="fa-solid <?= $scopeIcon ?> text-[9px]"></i>
+                            <span><?= e($scopeLabel) ?></span>
+                        </span>
+                        <h4 class="font-extrabold text-sm text-slate-800"><?= e($globalAnnouncement['judul']) ?></h4>
+                    </div>
+                    <p class="text-xs text-slate-700 leading-relaxed font-medium">
+                        <?= nl2br(e($globalAnnouncement['pesan'])) ?>
+                    </p>
+                </div>
+            </div>
+            <button type="button" onclick="this.closest('.system-announcement-banner').remove()" class="text-slate-400 hover:text-slate-600 text-sm p-1 transition-colors" title="Tutup pengumuman ini">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <?php endif; ?>
 

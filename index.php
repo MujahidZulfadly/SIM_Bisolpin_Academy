@@ -17,6 +17,10 @@ if (!is_logged_in()) {
 // Routing otomatis sesuai role yang sedang aktif
 $role = auth_role();
 switch ($role) {
+    case ROLE_ADMIN_SISTEM:
+        redirect('modules/admin_sistem/index.php');
+        break;
+
     case ROLE_PIMPINAN:
         redirect('modules/pimpinan/index.php');
         break;

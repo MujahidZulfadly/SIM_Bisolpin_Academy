@@ -6,6 +6,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/config/app.php';
+require_once __DIR__ . '/notifications.php';
 
 /**
  * Escape string untuk mencegah serangan XSS
@@ -197,9 +198,10 @@ function render_status_badge(string $status): string
         'dipublikasikan'    => ['bg' => 'bg-emerald-50 text-emerald-700 border-emerald-200', 'icon' => 'fa-globe', 'label' => 'Tampil di Portofolio'],
         'lulus'             => ['bg' => 'bg-teal-50 text-teal-700 border-teal-200',       'icon' => 'fa-graduation-cap', 'label' => 'Lulus'],
         'baik'              => ['bg' => 'bg-emerald-50 text-emerald-700 border-emerald-200', 'icon' => 'fa-check', 'label' => 'Kondisi Baik'],
-        'hadir'             => ['bg' => 'bg-emerald-50 text-emerald-700 border-emerald-200', 'icon' => 'fa-user-check', 'label' => 'Hadir'],
-        'pending_review'    => ['bg' => 'bg-amber-50 text-amber-700 border-amber-200',       'icon' => 'fa-clock', 'label' => 'Menunggu Verifikasi'],
-        'menunggu_validasi' => ['bg' => 'bg-amber-50 text-amber-700 border-amber-200',       'icon' => 'fa-hourglass-half', 'label' => 'Menunggu Review Mentor'],
+        'hadir'                   => ['bg' => 'bg-emerald-50 text-emerald-700 border-emerald-200', 'icon' => 'fa-user-check', 'label' => 'Hadir'],
+        'pending_review'          => ['bg' => 'bg-amber-50 text-amber-800 border-amber-200',       'icon' => 'fa-file-shield', 'label' => 'Menunggu Review Pimpinan'],
+        'menunggu_aktivasi_admin' => ['bg' => 'bg-cyan-50 text-cyan-800 border-cyan-200',          'icon' => 'fa-user-gear', 'label' => 'Disetujui Pimpinan (Menunggu Admin)'],
+        'menunggu_validasi'       => ['bg' => 'bg-amber-50 text-amber-700 border-amber-200',       'icon' => 'fa-hourglass-half', 'label' => 'Menunggu Review Mentor'],
         'perlu_perbaikan'   => ['bg' => 'bg-rose-50 text-rose-700 border-rose-200',          'icon' => 'fa-pen-to-square', 'label' => 'Perlu Revisi'],
         'draft'             => ['bg' => 'bg-slate-100 text-slate-700 border-slate-200',     'icon' => 'fa-file-lines', 'label' => 'Draft'],
         'izin'              => ['bg' => 'bg-sky-50 text-sky-700 border-sky-200',             'icon' => 'fa-envelope-open-text', 'label' => 'Izin'],
@@ -850,12 +852,678 @@ function ensure_database_schema_integrity(?PDO $db = null): bool
         // 6. Pastikan tabel-tabel pendukung ada
         ensure_table_evaluasi_mentor_exists($db);
 
+        // 7. Pastikan role admin_sistem didukung di tabel users
+        try {
+            $stmtUserCol = $db->query("SHOW COLUMNS FROM `users` LIKE 'role'");
+            $userRoleCol = $stmtUserCol->fetch();
+            if ($userRoleCol && strpos($userRoleCol['Type'], 'admin_sistem') === false) {
+                $db->exec("ALTER TABLE `users` MODIFY COLUMN `role` ENUM('admin_sistem','pimpinan','direktur_cabang','bak','mentor','staff','sarpras','siswa') NOT NULL DEFAULT 'siswa'");
+            }
+        } catch (\Throwable $e) {
+            error_log("Gagal alter role users: " . $e->getMessage());
+        }
+
+        // 8. Pastikan tabel_cabang mendukung workflow pendaftaran multi-tahap
+        try {
+            $cabangCols = $db->query("SHOW COLUMNS FROM `tabel_cabang`")->fetchAll(PDO::FETCH_COLUMN);
+            $cabangColMap = array_flip($cabangCols);
+
+            // Perbarui enum status_mitra agar menyertakan 'menunggu_aktivasi_admin'
+            $stmtCabangStatus = $db->query("SHOW COLUMNS FROM `tabel_cabang` LIKE 'status_mitra'");
+            $cabangStatusCol = $stmtCabangStatus->fetch();
+            if ($cabangStatusCol && strpos($cabangStatusCol['Type'], 'menunggu_aktivasi_admin') === false) {
+                $db->exec("ALTER TABLE `tabel_cabang` MODIFY COLUMN `status_mitra` ENUM('pending_review','menunggu_aktivasi_admin','aktif','ditolak','nonaktif') NOT NULL DEFAULT 'pending_review'");
+            }
+
+            $newCabangCols = [
+                'catatan_review_pimpinan' => "TEXT NULL AFTER `dokumen_kemitraan`",
+                'tanggal_review_pimpinan' => "DATETIME NULL AFTER `catatan_review_pimpinan`",
+                'catatan_admin_sistem'    => "TEXT NULL AFTER `tanggal_review_pimpinan`",
+                'tanggal_aktivasi_admin'  => "DATETIME NULL AFTER `catatan_admin_sistem`",
+                'latitude'                => "DECIMAL(10, 8) NULL DEFAULT NULL AFTER `provinsi`",
+                'longitude'               => "DECIMAL(11, 8) NULL DEFAULT NULL AFTER `latitude`",
+            ];
+
+            foreach ($newCabangCols as $col => $def) {
+                if (!isset($cabangColMap[$col])) {
+                    try {
+                        $db->exec("ALTER TABLE `tabel_cabang` ADD COLUMN `{$col}` {$def}");
+                        $cabangColMap[$col] = true;
+                    } catch (\Throwable $e) {
+                        try {
+                            $cleanDef = preg_replace('/\s+AFTER\s+`?[a-zA-Z0-9_]+`?/i', '', $def);
+                            $db->exec("ALTER TABLE `tabel_cabang` ADD COLUMN `{$col}` {$cleanDef}");
+                            $cabangColMap[$col] = true;
+                        } catch (\Throwable $e2) {
+                            error_log("Gagal add column {$col} on tabel_cabang: " . $e2->getMessage());
+                        }
+                    }
+                }
+            }
+
+            // Seed koordinat default untuk cabang yang belum memiliki latitude/longitude
+            try {
+                $cityCoords = [
+                    'makassar'   => [-5.147665, 119.432732],
+                    'jakarta'    => [-6.229746, 106.858482],
+                    'surabaya'   => [-7.265757, 112.751680],
+                    'kolaka'     => [-4.055800, 121.602500],
+                    'gowa'       => [-5.201400, 119.452600],
+                    'maros'      => [-5.006400, 119.575300],
+                    'bandung'    => [-6.917464, 107.619123],
+                    'yogyakarta' => [-7.795580, 110.369490],
+                    'denpasar'   => [-8.670458, 115.212629],
+                    'balikpapan' => [-1.237900, 116.828900],
+                    'samarinda'  => [-0.502106, 117.153709],
+                    'medan'      => [3.595196, 98.672223],
+                    'manado'     => [1.474830, 124.842079],
+                    'kendari'    => [-3.998460, 122.512970],
+                ];
+
+                $stmtNoCoord = $db->query("SELECT id, kota, nama_cabang FROM `tabel_cabang` WHERE `latitude` IS NULL OR `latitude` = 0");
+                $branchesToUpdate = $stmtNoCoord->fetchAll();
+                $updCoord = $db->prepare("UPDATE `tabel_cabang` SET `latitude` = ?, `longitude` = ? WHERE `id` = ?");
+
+                foreach ($branchesToUpdate as $b) {
+                    $found = false;
+                    $kotaLower = strtolower($b['kota'] . ' ' . $b['nama_cabang']);
+                    foreach ($cityCoords as $cKey => $coords) {
+                        if (str_contains($kotaLower, $cKey)) {
+                            $updCoord->execute([$coords[0], $coords[1], $b['id']]);
+                            $found = true;
+                            break;
+                        }
+                    }
+                    if (!$found) {
+                        $updCoord->execute([-5.147665, 119.432732, $b['id']]);
+                    }
+                }
+            } catch (\Throwable $e) {}
+        } catch (\Throwable $e) {
+            error_log("Gagal upgrade skema tabel_cabang: " . $e->getMessage());
+        }
+
+        // 9. Pastikan tabel_audit_log tersedia
+        $db->exec("
+            CREATE TABLE IF NOT EXISTS `tabel_audit_log` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `user_id` INT NULL,
+                `username` VARCHAR(60) NULL,
+                `role` VARCHAR(50) NULL,
+                `id_cabang` INT NULL,
+                `aksi` VARCHAR(100) NOT NULL,
+                `deskripsi` TEXT NOT NULL,
+                `ip_address` VARCHAR(50) NULL,
+                `user_agent` VARCHAR(255) NULL,
+                `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                INDEX `idx_audit_user` (`user_id`),
+                INDEX `idx_audit_aksi` (`aksi`),
+                INDEX `idx_audit_created` (`created_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+
+        // 10. Pastikan tabel password_resets tersedia
+        $db->exec("
+            CREATE TABLE IF NOT EXISTS `password_resets` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `user_id` INT NOT NULL,
+                `email` VARCHAR(150) NOT NULL,
+                `token` VARCHAR(128) NOT NULL,
+                `token_hash` VARCHAR(64) NOT NULL,
+                `expires_at` DATETIME NOT NULL,
+                `is_used` TINYINT(1) NOT NULL DEFAULT 0,
+                `ip_address` VARCHAR(50) NULL,
+                `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                INDEX `idx_reset_token` (`token_hash`),
+                INDEX `idx_reset_user` (`user_id`),
+                INDEX `idx_reset_expires` (`expires_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+
+        // 11. Pastikan tabel tabel_pengaturan_sistem tersedia
+        $db->exec("
+            CREATE TABLE IF NOT EXISTS `tabel_pengaturan_sistem` (
+                `kunci` VARCHAR(100) PRIMARY KEY,
+                `nilai` LONGTEXT NULL,
+                `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+
+        // 12. Pastikan tabel_pengumuman (Sistem CRUD Pengumuman Multi-Target) tersedia
+        $db->exec("
+            CREATE TABLE IF NOT EXISTS `tabel_pengumuman` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `judul` VARCHAR(200) NOT NULL,
+                `pesan` TEXT NOT NULL,
+                `tipe` ENUM('info', 'warning', 'danger', 'success') NOT NULL DEFAULT 'info',
+                `target_role` VARCHAR(100) NOT NULL DEFAULT 'semua',
+                `id_cabang` INT NULL,
+                `is_aktif` TINYINT(1) NOT NULL DEFAULT 1,
+                `created_by` INT NULL,
+                `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX `idx_pengumuman_aktif` (`is_aktif`),
+                INDEX `idx_pengumuman_cabang` (`id_cabang`),
+                INDEX `idx_pengumuman_role` (`target_role`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+
+        // Backfill data dari pengaturan_sistem lama jika tabel_pengumuman masih kosong
+        try {
+            $countPeng = (int)$db->query("SELECT COUNT(*) FROM `tabel_pengumuman`")->fetchColumn();
+            if ($countPeng === 0) {
+                $stmtOld = $db->query("SELECT kunci, nilai FROM `tabel_pengaturan_sistem` WHERE kunci IN ('pengumuman_judul', 'pengumuman_pesan', 'pengumuman_tipe', 'pengumuman_aktif')");
+                $oldMap = [];
+                foreach ($stmtOld->fetchAll() as $r) {
+                    $oldMap[$r['kunci']] = $r['nilai'];
+                }
+                if (!empty($oldMap['pengumuman_pesan'])) {
+                    $isAktif = ($oldMap['pengumuman_aktif'] ?? '0') === '1' ? 1 : 0;
+                    $insOld = $db->prepare("
+                        INSERT INTO `tabel_pengumuman` (`judul`, `pesan`, `tipe`, `target_role`, `id_cabang`, `is_aktif`, `created_at`)
+                        VALUES (?, ?, ?, 'semua', NULL, ?, NOW())
+                    ");
+                    $insOld->execute([
+                        $oldMap['pengumuman_judul'] ?? 'Pemberitahuan Sistem',
+                        $oldMap['pengumuman_pesan'],
+                        $oldMap['pengumuman_tipe'] ?? 'info',
+                        $isAktif
+                    ]);
+                }
+            }
+        } catch (\Throwable $e) {}
+
+        // 9. Pastikan akun default Admin Sistem ada jika belum dibuat
+        try {
+            $stmtCekAdmin = $db->query("SELECT id FROM users WHERE role = 'admin_sistem' LIMIT 1");
+            if (!$stmtCekAdmin->fetch()) {
+                $pwHash = password_hash('password123', PASSWORD_BCRYPT);
+                $stmtInsAdmin = $db->prepare("
+                    INSERT INTO users (username, email, password_hash, role, id_cabang, is_active, created_at)
+                    VALUES ('admin.sistem', 'admin@bisolpin.com', ?, 'admin_sistem', NULL, 1, NOW())
+                ");
+                $stmtInsAdmin->execute([$pwHash]);
+            }
+        } catch (\Throwable $e) {
+            error_log("Gagal buat akun default admin_sistem: " . $e->getMessage());
+        }
+
+        // 13. Pastikan tabel_notifikasi (Pusat Notifikasi Interaktif) tersedia
+        $db->exec("
+            CREATE TABLE IF NOT EXISTS `tabel_notifikasi` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `user_id` INT NULL,
+                `target_role` VARCHAR(50) NULL,
+                `id_cabang` INT NULL,
+                `judul` VARCHAR(150) NOT NULL,
+                `pesan` TEXT NOT NULL,
+                `link` VARCHAR(255) NULL,
+                `tipe` ENUM('info', 'warning', 'success', 'danger') NOT NULL DEFAULT 'info',
+                `is_read` TINYINT(1) NOT NULL DEFAULT 0,
+                `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                INDEX `idx_notif_user` (`user_id`, `is_read`),
+                INDEX `idx_notif_target` (`target_role`, `id_cabang`, `is_read`),
+                INDEX `idx_notif_created` (`created_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+
+        // Seed notifikasi sambutan jika tabel notifikasi masih kosong
+        try {
+            $countNotif = (int)$db->query("SELECT COUNT(*) FROM `tabel_notifikasi`")->fetchColumn();
+            if ($countNotif === 0) {
+                $insNotif = $db->prepare("
+                    INSERT INTO `tabel_notifikasi` (`target_role`, `judul`, `pesan`, `link`, `tipe`, `is_read`, `created_at`)
+                    VALUES ('semua', 'Selamat Datang di SIM Bisolpin', 'Sistem Manajemen Terpadu Bisolpin Academy telah aktif. Pantau jadwal, aktivitas, dan perkembangan akademik Anda di sini.', '#', 'info', 0, NOW())
+                ");
+                $insNotif->execute();
+            }
+        } catch (\Throwable $e) {}
+
         $checked = true;
         return true;
     } catch (\Throwable $e) {
         error_log("Schema integrity check failed: " . $e->getMessage());
         return false;
     }
+}
+
+/**
+ * Catat aktivitas / audit trail ke tabel_audit_log
+ */
+function log_activity(string $aksi, string $deskripsi, ?int $userId = null): void
+{
+    try {
+        $db = get_db();
+        $user = auth_user();
+        $uid = $userId ?? ($user['id'] ?? null);
+        $uname = $user['username'] ?? 'sistem';
+        $role = $user['role'] ?? 'sistem';
+        $branchId = $user['id_cabang'] ?? null;
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+        $ua = substr($_SERVER['HTTP_USER_AGENT'] ?? 'Unknown', 0, 250);
+
+        $stmt = $db->prepare("
+            INSERT INTO tabel_audit_log (user_id, username, role, id_cabang, aksi, deskripsi, ip_address, user_agent, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        ");
+        $stmt->execute([$uid, $uname, $role, $branchId, $aksi, $deskripsi, $ip, $ua]);
+    } catch (\Throwable $e) {
+        error_log("Gagal log activity: " . $e->getMessage());
+    }
+}
+
+/**
+ * Mendapatkan data pengumuman sistem global yang sedang aktif jika ada.
+ * Mendukung filter target role dan target cabang secara dinamis (Sistem CRUD Pengumuman).
+ */
+function get_active_system_announcement(?PDO $db = null, ?string $userRole = null, ?int $userBranchId = null): ?array
+{
+    static $cacheMap = [];
+
+    $db = $db ?? get_db();
+
+    // Otomatis deteksi user yang sedang login jika parameter tidak disuplai
+    if ($userRole === null || $userBranchId === null) {
+        $u = function_exists('auth_user') ? auth_user() : ($_SESSION['user'] ?? null);
+        if ($userRole === null && $u) {
+            $userRole = $u['role'] ?? null;
+        }
+        if ($userBranchId === null && $u) {
+            $userBranchId = !empty($u['id_cabang']) ? (int)$u['id_cabang'] : null;
+        }
+    }
+
+    $cacheKey = ($userRole ?? 'guest') . '_' . ($userBranchId ?? 'global');
+    if (array_key_exists($cacheKey, $cacheMap)) {
+        return $cacheMap[$cacheKey];
+    }
+
+    try {
+        // 1. Cek dari tabel_pengumuman (Sistem CRUD Baru)
+        $sql = "
+            SELECT p.*, c.nama_cabang, c.kode_cabang
+            FROM tabel_pengumuman p
+            LEFT JOIN tabel_cabang c ON p.id_cabang = c.id
+            WHERE p.is_aktif = 1
+        ";
+        $params = [];
+
+        if ($userRole) {
+            $sql .= " AND (p.target_role = 'semua' OR p.target_role = ?)";
+            $params[] = $userRole;
+        } else {
+            $sql .= " AND p.target_role = 'semua'";
+        }
+
+        if ($userBranchId) {
+            $sql .= " AND (p.id_cabang IS NULL OR p.id_cabang = ?)";
+            $params[] = $userBranchId;
+        } else {
+            $sql .= " AND p.id_cabang IS NULL";
+        }
+
+        // Prioritaskan pengumuman spesifik cabang dulu, lalu pengumuman terbaru
+        $sql .= " ORDER BY (p.id_cabang IS NOT NULL) DESC, p.id DESC LIMIT 1";
+
+        $stmt = $db->prepare($sql);
+        $stmt->execute($params);
+        $pengumuman = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($pengumuman) {
+            $cacheMap[$cacheKey] = $pengumuman;
+            return $pengumuman;
+        }
+
+        // 2. Fallback: cek ke tabel_pengaturan_sistem jika tabel_pengumuman belum ada record
+        $stmtOld = $db->query("
+            SELECT kunci, nilai 
+            FROM tabel_pengaturan_sistem 
+            WHERE kunci IN ('pengumuman_judul', 'pengumuman_pesan', 'pengumuman_tipe', 'pengumuman_aktif')
+        ");
+        $settings = [];
+        foreach ($stmtOld->fetchAll() as $row) {
+            $settings[$row['kunci']] = $row['nilai'];
+        }
+
+        if (($settings['pengumuman_aktif'] ?? '0') === '1' && !empty($settings['pengumuman_pesan'])) {
+            $legacy = [
+                'id'          => 0,
+                'judul'       => !empty($settings['pengumuman_judul']) ? $settings['pengumuman_judul'] : 'Pemberitahuan Sistem',
+                'pesan'       => $settings['pengumuman_pesan'],
+                'tipe'        => $settings['pengumuman_tipe'] ?? 'info',
+                'target_role' => 'semua',
+                'id_cabang'   => null,
+                'nama_cabang' => null,
+                'is_aktif'    => 1
+            ];
+            $cacheMap[$cacheKey] = $legacy;
+            return $legacy;
+        }
+    } catch (\Throwable $e) {
+        error_log("Gagal mengambil pengumuman sistem: " . $e->getMessage());
+    }
+
+    $cacheMap[$cacheKey] = null;
+    return null;
+}
+
+/**
+ * Ekspor data ke format Microsoft Excel (.xls / SpreadsheetML HTML)
+ * dengan formatting rapi, kop resmi Bisolpin Academy, dan tipe data otomatis.
+ *
+ * @param string $filename  Nama file tanpa ekstensi
+ * @param string $title     Judul utama laporan
+ * @param array  $columns   Definisi kolom: key => [ 'label' => '...', 'type' => 'text|number|currency|date|percentage|badge|center', 'width' => 120 ]
+ *                          atau array flat string: ['No', 'NIS', 'Nama']
+ * @param array  $rows      Daftar baris data tabular
+ * @param array  $metadata  Informasi kop (Cabang, Periode, Diunduh oleh, dll)
+ * @param array  $summary   Baris ringkasan / total opsional
+ */
+function export_to_excel(
+    string $filename,
+    string $title,
+    array $columns,
+    array $rows,
+    array $metadata = [],
+    ?array $summary = null
+): void {
+    if (ob_get_level()) {
+        ob_end_clean();
+    }
+
+    $safeFilename = preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', $filename);
+    if (!str_ends_with(strtolower($safeFilename), '.xls')) {
+        $safeFilename .= '.xls';
+    }
+
+    header('Content-Type: application/vnd.ms-excel; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="' . $safeFilename . '"');
+    header('Cache-Control: max-age=0, no-cache, must-revalidate, proxy-revalidate');
+    header('Pragma: public');
+
+    // Output UTF-8 BOM
+    echo "\xEF\xBB\xBF";
+
+    // Standardisasi definisi kolom
+    $normalizedCols = [];
+    foreach ($columns as $key => $col) {
+        if (is_array($col)) {
+            $normalizedCols[$key] = [
+                'label' => $col['label'] ?? (string)$key,
+                'type'  => $col['type'] ?? 'text',
+                'width' => $col['width'] ?? null
+            ];
+        } else {
+            $normalizedCols[$key] = [
+                'label' => (string)$col,
+                'type'  => 'text',
+                'width' => null
+            ];
+        }
+    }
+
+    $colCount = max(1, count($normalizedCols));
+?>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <!--[if gte mso 9]>
+    <xml>
+        <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+                <x:ExcelWorksheet>
+                    <x:Name><?= htmlspecialchars(substr($title, 0, 31), ENT_QUOTES, 'UTF-8') ?></x:Name>
+                    <x:WorksheetOptions>
+                        <x:DisplayGridlines/>
+                    </x:WorksheetOptions>
+                </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+        </x:ExcelWorkbook>
+    </xml>
+    <![endif]-->
+    <style>
+        body {
+            font-family: 'Calibri', 'Arial', sans-serif;
+            font-size: 11pt;
+            color: #1E293B;
+        }
+        .report-header {
+            font-size: 15pt;
+            font-weight: bold;
+            color: #0E6860;
+            text-align: left;
+        }
+        .brand-sub {
+            font-size: 10pt;
+            font-weight: bold;
+            color: #1BA89C;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .meta-label {
+            font-weight: bold;
+            color: #334155;
+            width: 140px;
+        }
+        .meta-val {
+            color: #0F172A;
+        }
+        .data-table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        .data-table th {
+            background-color: #1BA89C;
+            color: #FFFFFF;
+            font-weight: bold;
+            border: 0.5pt solid #0E6860;
+            padding: 8px 10px;
+            text-align: center;
+            vertical-align: middle;
+        }
+        .data-table td {
+            border: 0.5pt solid #CBD5E1;
+            padding: 6px 8px;
+            vertical-align: middle;
+        }
+        .row-even {
+            background-color: #FFFFFF;
+        }
+        .row-odd {
+            background-color: #F8FAFC;
+        }
+        /* Excel number formatting */
+        .col-text {
+            mso-number-format: "\@";
+            text-align: left;
+        }
+        .col-center {
+            text-align: center;
+        }
+        .col-number {
+            mso-number-format: "#,##0";
+            text-align: right;
+        }
+        .col-currency {
+            mso-number-format: "\"Rp\"\\ #,##0";
+            text-align: right;
+            font-weight: 500;
+        }
+        .col-percentage {
+            mso-number-format: "0.0%";
+            text-align: right;
+        }
+        .col-date {
+            mso-number-format: "yyyy-mm-dd";
+            text-align: center;
+        }
+        .badge {
+            font-weight: bold;
+            text-align: center;
+        }
+        .badge-success {
+            background-color: #D1FAE5;
+            color: #065F46;
+        }
+        .badge-warning {
+            background-color: #FEF3C7;
+            color: #92400E;
+        }
+        .badge-danger {
+            background-color: #FEE2E2;
+            color: #991B1B;
+        }
+        .badge-info {
+            background-color: #E0F2FE;
+            color: #075985;
+        }
+        .summary-row {
+            background-color: #E2E8F0;
+            font-weight: bold;
+            border-top: 1.5pt solid #0E6860;
+        }
+        .footer-note {
+            font-size: 9pt;
+            color: #64748B;
+            margin-top: 15px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <table>
+        <tr>
+            <td colspan="<?= $colCount ?>" class="brand-sub">SISTEM INFORMASI MANAJEMEN BISOLPIN ACADEMY</td>
+        </tr>
+        <tr>
+            <td colspan="<?= $colCount ?>" class="report-header"><?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?></td>
+        </tr>
+        <tr>
+            <td colspan="<?= $colCount ?>" style="height: 6px;"></td>
+        </tr>
+        <?php foreach ($metadata as $mLabel => $mVal): ?>
+        <tr>
+            <td class="meta-label"><strong><?= htmlspecialchars((string)$mLabel, ENT_QUOTES, 'UTF-8') ?></strong></td>
+            <td colspan="<?= max(1, $colCount - 1) ?>" class="meta-val">: <?= htmlspecialchars((string)$mVal, ENT_QUOTES, 'UTF-8') ?></td>
+        </tr>
+        <?php endforeach; ?>
+        <tr>
+            <td colspan="<?= $colCount ?>" style="height: 10px;"></td>
+        </tr>
+    </table>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <?php foreach ($normalizedCols as $col): ?>
+                    <th <?= !empty($col['width']) ? 'width="' . (int)$col['width'] . '"' : '' ?>><?= htmlspecialchars($col['label'], ENT_QUOTES, 'UTF-8') ?></th>
+                <?php endforeach; ?>
+            </tr>
+        </thead>
+        <tbody>
+            <?php if (empty($rows)): ?>
+            <tr>
+                <td colspan="<?= $colCount ?>" style="text-align: center; color: #94A3B8; padding: 20px;">
+                    Tidak ada data untuk ditampilkan pada periode/filter ini.
+                </td>
+            </tr>
+            <?php else: ?>
+                <?php foreach ($rows as $idx => $row): ?>
+                <tr class="<?= ($idx % 2 === 0) ? 'row-even' : 'row-odd' ?>">
+                    <?php foreach ($normalizedCols as $key => $col): 
+                        $val = $row[$key] ?? '';
+                        $type = $col['type'];
+                        $cellClass = 'col-' . $type;
+
+                        if ($type === 'currency' && is_numeric($val)) {
+                            $displayVal = (float)$val;
+                        } elseif ($type === 'number' && is_numeric($val)) {
+                            $displayVal = (float)$val;
+                        } elseif ($type === 'percentage' && is_numeric($val)) {
+                            $displayVal = ((float)$val) / 100;
+                        } elseif ($type === 'badge') {
+                            $sVal = strtolower((string)$val);
+                            $badgeClass = 'badge-info';
+                            if (in_array($sVal, ['hadir', 'lunas', 'aktif', 'baik', 'selesai', 'valid', 'terverifikasi'])) {
+                                $badgeClass = 'badge-success';
+                            } elseif (in_array($sVal, ['izin', 'cicilan', 'perlu_perbaikan', 'maintenance', 'kurang', 'rusak_ringan'])) {
+                                $badgeClass = 'badge-warning';
+                            } elseif (in_array($sVal, ['alfa', 'belum_bayar', 'keluar', 'rusak', 'rusak_berat', 'ditolak', 'nonaktif'])) {
+                                $badgeClass = 'badge-danger';
+                            }
+                            $cellClass .= ' badge ' . $badgeClass;
+                            $displayVal = strtoupper(str_replace('_', ' ', (string)$val));
+                        } else {
+                            $displayVal = (string)$val;
+                        }
+                    ?>
+                    <td class="<?= $cellClass ?>"><?= is_numeric($displayVal) && in_array($type, ['currency', 'number', 'percentage'], true) ? $displayVal : htmlspecialchars((string)$displayVal, ENT_QUOTES, 'UTF-8') ?></td>
+                    <?php endforeach; ?>
+                </tr>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </tbody>
+        <?php if (!empty($summary)): ?>
+        <tfoot>
+            <tr class="summary-row">
+                <?php if (isset($summary['colspan']) && $summary['colspan'] > 0): ?>
+                    <td colspan="<?= (int)$summary['colspan'] ?>" style="text-align: right; font-weight: bold;">
+                        <?= htmlspecialchars($summary['label'] ?? 'TOTAL', ENT_QUOTES, 'UTF-8') ?>:
+                    </td>
+                <?php endif; ?>
+                <?php 
+                $skipCount = (int)($summary['colspan'] ?? 0);
+                $currIdx = 0;
+                foreach ($normalizedCols as $key => $col): 
+                    $currIdx++;
+                    if ($currIdx <= $skipCount) continue;
+                    $sumVal = $summary['values'][$key] ?? '';
+                    $type = $col['type'];
+                ?>
+                    <td class="col-<?= $type ?>" style="font-weight: bold;"><?= is_numeric($sumVal) && in_array($type, ['currency', 'number'], true) ? $sumVal : htmlspecialchars((string)$sumVal, ENT_QUOTES, 'UTF-8') ?></td>
+                <?php endforeach; ?>
+            </tr>
+        </tfoot>
+        <?php endif; ?>
+    </table>
+
+    <table>
+        <tr>
+            <td colspan="<?= $colCount ?>" class="footer-note">
+                Dokumen ini digenerate secara otomatis oleh SIM Bisolpin Academy pada <?= date('d/m/Y H:i:s') ?> WITA.
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+<?php
+    exit;
+}
+
+/**
+ * Ekspor data ke format CSV standar dengan UTF-8 BOM
+ */
+function export_to_csv(string $filename, array $headers, array $rows): void {
+    if (ob_get_level()) {
+        ob_end_clean();
+    }
+    $safeFilename = preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', $filename);
+    if (!str_ends_with(strtolower($safeFilename), '.csv')) {
+        $safeFilename .= '.csv';
+    }
+    header('Content-Type: text/csv; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="' . $safeFilename . '"');
+    header('Cache-Control: max-age=0, no-cache, must-revalidate, proxy-revalidate');
+    header('Pragma: public');
+    
+    $out = fopen('php://output', 'w');
+    fprintf($out, chr(0xEF).chr(0xBB).chr(0xBF));
+    fputcsv($out, array_values($headers));
+    foreach ($rows as $row) {
+        fputcsv($out, array_values($row));
+    }
+    fclose($out);
+    exit;
 }
 
 

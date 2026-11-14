@@ -40,6 +40,46 @@ $stmt = $db->prepare($sql);
 $stmt->execute($params);
 $siswaList = $stmt->fetchAll();
 
+// EKSPOR EXCEL SISWA NASIONAL
+if (isset($_GET['export']) && $_GET['export'] === 'excel') {
+    $columns = [
+        'no'             => ['label' => 'No', 'type' => 'center', 'width' => 45],
+        'nis'            => ['label' => 'NIS Bisolpin', 'type' => 'text', 'width' => 120],
+        'nama_lengkap'   => ['label' => 'Nama Siswa', 'type' => 'text', 'width' => 180],
+        'cabang'         => ['label' => 'Cabang', 'type' => 'text', 'width' => 170],
+        'nama_layanan'   => ['label' => 'Program Layanan', 'type' => 'text', 'width' => 180],
+        'mentor'         => ['label' => 'Mentor Pembimbing', 'type' => 'text', 'width' => 160],
+        'sekolah'        => ['label' => 'Asal Sekolah', 'type' => 'text', 'width' => 160],
+        'progres'        => ['label' => 'Progres (%)', 'type' => 'number', 'width' => 90],
+        'sesi'           => ['label' => 'Pertemuan', 'type' => 'center', 'width' => 80],
+        'status_belajar' => ['label' => 'Status Belajar', 'type' => 'badge', 'width' => 110],
+        'catatan'        => ['label' => 'Catatan Progres Mentor', 'type' => 'text', 'width' => 220]
+    ];
+    $rows = [];
+    $no = 1;
+    foreach ($siswaList as $s) {
+        $rows[] = [
+            'no'             => $no++,
+            'nis'            => $s['nis_bisolpin'],
+            'nama_lengkap'   => $s['nama_lengkap'],
+            'cabang'         => $s['nama_cabang'] . ' (' . $s['kode_cabang'] . ')',
+            'nama_layanan'   => $s['nama_layanan'],
+            'mentor'         => $s['nama_mentor'] ?: 'Belum diplot',
+            'sekolah'        => $s['asal_sekolah_instansi'] ?: ($s['nama_sekolah'] ?? '-'),
+            'progres'        => (float)($s['persentase_progres'] ?? 0),
+            'sesi'           => (int)($s['pertemuan_terakhir_diikuti'] ?? 0),
+            'status_belajar' => $s['status_belajar'],
+            'catatan'        => $s['catatan_progres_mentor'] ?: '-'
+        ];
+    }
+    $metadata = [
+        'Cakupan'      => 'Seluruh Cabang Bisolpin Academy',
+        'Total Siswa'  => count($rows) . ' Siswa',
+        'Waktu Ekspor' => date('d-m-Y H:i') . ' WITA'
+    ];
+    export_to_excel('siswa_nasional_' . date('Ymd_His'), 'REKAPITULASI DATA SISWA NASIONAL BISOLPIN ACADEMY', $columns, $rows, $metadata);
+}
+
 require_once dirname(__DIR__, 2) . '/includes/header.php';
 require_once dirname(__DIR__, 2) . '/includes/sidebar.php';
 require_once dirname(__DIR__, 2) . '/includes/topbar.php';
@@ -56,6 +96,13 @@ require_once dirname(__DIR__, 2) . '/includes/topbar.php';
         <p class="text-xs text-slate-500 mt-1">
             Menampilkan data siswa aktif dan pencapaian kompetensi tatap muka di seluruh cabang.
         </p>
+    </div>
+
+    <div>
+        <a href="?export=excel" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center gap-1.5 transition-all">
+            <i class="fa-solid fa-file-excel"></i>
+            <span>Ekspor Excel (.xls)</span>
+        </a>
     </div>
 </div>
 

@@ -125,6 +125,11 @@ function login_user(array $userData): void
 
     // Reset filter cabang sesi jika Pimpinan/BAK
     unset($_SESSION['filter_branch_id']);
+
+    // Catat ke audit log
+    if (function_exists('log_activity')) {
+        log_activity('LOGIN', "Pengguna '{$userData['username']}' ({$userData['role']}) berhasil login ke sistem", (int)$userData['id']);
+    }
 }
 
 /**
@@ -166,6 +171,7 @@ function check_role(array|string $allowedRoles): void
     if (!in_array($currentRole, $roles, true)) {
         // Alihkan ke rute modul masing-masing dengan pesan penolakan
         $redirectMap = [
+            ROLE_ADMIN_SISTEM    => 'modules/admin_sistem/index.php',
             ROLE_PIMPINAN        => 'modules/pimpinan/index.php',
             ROLE_DIREKTUR_CABANG => 'modules/direktur_cabang/index.php',
             ROLE_BAK             => 'modules/bak/index.php',
@@ -261,8 +267,8 @@ function verify_branch_access(?int $recordBranchId): void
 
     $role = auth_role();
 
-    // Role Pusat (Pimpinan & BAK) memiliki wewenang lintas cabang
-    if (in_array($role, [ROLE_PIMPINAN, ROLE_BAK], true)) {
+    // Role Pusat & Admin Sistem memiliki wewenang lintas cabang
+    if (in_array($role, [ROLE_ADMIN_SISTEM, ROLE_PIMPINAN, ROLE_BAK], true)) {
         return;
     }
 
@@ -287,6 +293,121 @@ function verify_branch_access(?int $recordBranchId): void
             'Akses Ditolak (403 Forbidden): Anda tidak memiliki wewenang untuk melihat atau memanipulasi data milik cabang lain.',
             'Pelanggaran Hak Akses'
         );
+    }
+}
+
+/**
+ * Buat token reset kata sandi baru (Cryptographically Secure) berdurasi 30 menit.
+ */
+function generate_password_reset_token(int $userId, string $email): ?array
+{
+    $db = get_db();
+    ensure_database_schema_integrity($db);
+
+    try {
+        // Nonaktifkan token lama yang belum digunakan untuk user ini
+        $stmtInvalidate = $db->prepare("UPDATE password_resets SET is_used = 1 WHERE user_id = ? AND is_used = 0");
+        $stmtInvalidate->execute([$userId]);
+
+        // Buat token acak berkekuatan kriptografis tinggi
+        $rawToken = bin2hex(random_bytes(32)); // 64 karakter hex
+        $tokenHash = hash('sha256', $rawToken);
+        $expiresAt = date('Y-m-d H:i:s', time() + 1800); // 30 menit
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+
+        $stmt = $db->prepare("
+            INSERT INTO password_resets (user_id, email, token, token_hash, expires_at, is_used, ip_address, created_at)
+            VALUES (?, ?, ?, ?, ?, 0, ?, NOW())
+        ");
+        $stmt->execute([$userId, $email, $rawToken, $tokenHash, $expiresAt, $ip]);
+
+        return [
+            'raw_token'  => $rawToken,
+            'token_hash' => $tokenHash,
+            'expires_at' => $expiresAt,
+            'reset_url'  => base_url("modules/auth/reset_password.php?token={$rawToken}"),
+        ];
+    } catch (\Throwable $e) {
+        error_log("Gagal generate token reset password: " . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * Verifikasi kevalidan token reset kata sandi (belum kadaluarsa dan belum terpakai)
+ */
+function verify_password_reset_token(string $token): ?array
+{
+    if (empty($token) || strlen($token) < 16) {
+        return null;
+    }
+
+    $db = get_db();
+    ensure_database_schema_integrity($db);
+
+    $tokenHash = hash('sha256', $token);
+
+    try {
+        $stmt = $db->prepare("
+            SELECT pr.*, u.username, u.email as user_email, u.role, u.is_active,
+                   COALESCE(p.nama_lengkap, s.nama_lengkap, u.username) as display_name
+            FROM password_resets pr
+            JOIN users u ON u.id = pr.user_id
+            LEFT JOIN tabel_pegawai p ON p.user_id = u.id
+            LEFT JOIN tabel_siswa s ON s.user_id = u.id
+            WHERE pr.token_hash = ? 
+              AND pr.is_used = 0 
+              AND pr.expires_at > NOW()
+            LIMIT 1
+        ");
+        $stmt->execute([$tokenHash]);
+        $row = $stmt->fetch();
+
+        return $row ?: null;
+    } catch (\Throwable $e) {
+        error_log("Gagal verifikasi token reset password: " . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * Konsumsi token dan ubah kata sandi pengguna secara permanen
+ */
+function complete_password_reset(string $token, string $newPassword): bool
+{
+    $resetData = verify_password_reset_token($token);
+    if (!$resetData) {
+        return false;
+    }
+
+    $db = get_db();
+    try {
+        $db->beginTransaction();
+
+        $userId = (int)$resetData['user_id'];
+        $newHash = password_hash($newPassword, PASSWORD_BCRYPT);
+
+        // 1. Perbarui kata sandi di tabel users
+        $stmtUp = $db->prepare("UPDATE users SET password_hash = ? WHERE id = ?");
+        $stmtUp->execute([$newHash, $userId]);
+
+        // 2. Tandai token sebagai telah digunakan (is_used = 1)
+        $stmtToken = $db->prepare("UPDATE password_resets SET is_used = 1 WHERE id = ?");
+        $stmtToken->execute([(int)$resetData['id']]);
+
+        // 3. Catat audit trail
+        log_activity(
+            'RESET_PASSWORD_MANDIRI',
+            "Pengguna {$resetData['username']} ({$resetData['role']}) berhasil mengatur ulang kata sandi melalui tautan token pemulihan.",
+            $userId
+        );
+
+        $db->commit();
+        return true;
+    } catch (\Throwable $e) {
+        $db->rollBack();
+        error_log("Gagal eksekusi reset kata sandi: " . $e->getMessage());
+        return false;
     }
 }
 

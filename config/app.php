@@ -62,6 +62,7 @@ define('URL_UPLOAD_PRODUK', BASE_URL . '/assets/uploads/produk_siswa/');
 define('URL_UPLOAD_MITRA', BASE_URL . '/assets/uploads/dokumen_mitra/');
 
 // Role Mapping & Label Ramah Pengguna
+define('ROLE_ADMIN_SISTEM', 'admin_sistem');
 define('ROLE_PIMPINAN', 'pimpinan');
 define('ROLE_DIREKTUR_CABANG', 'direktur_cabang');
 define('ROLE_BAK', 'bak');
@@ -71,6 +72,7 @@ define('ROLE_SARPRAS', 'sarpras');
 define('ROLE_SISWA', 'siswa');
 
 const APP_ROLES = [
+    ROLE_ADMIN_SISTEM    => ['label' => 'Admin Sistem (IT)',           'badge' => 'bg-cyan-100 text-cyan-800 border-cyan-200',     'color' => '#0891B2'],
     ROLE_PIMPINAN        => ['label' => 'Pimpinan Pusat (Super Admin)', 'badge' => 'bg-purple-100 text-purple-800 border-purple-200', 'color' => '#8B5CF6'],
     ROLE_DIREKTUR_CABANG => ['label' => 'Direktur Cabang (Mitra)',     'badge' => 'bg-indigo-100 text-indigo-800 border-indigo-200', 'color' => '#6366F1'],
     ROLE_BAK             => ['label' => 'Bagian Akademik (BAK)',       'badge' => 'bg-blue-100 text-blue-800 border-blue-200',     'color' => '#3B82F6'],

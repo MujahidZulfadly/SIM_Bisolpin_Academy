@@ -14,7 +14,7 @@ require_once dirname(__DIR__) . '/core/flash.php';
     <!-- Global App Footer -->
     <footer class="px-8 py-5 border-t border-slate-200/80 bg-white/60 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-3">
         <div>
-            &copy; <?= date('Y') ?> <strong><?= APP_NAME ?></strong>. PT Solusi Pintar Indonesia. All rights reserved.
+            &copy; <?= date('Y') ?> <strong><?= APP_NAME ?></strong>. PT. Liny Jaya Informatika. All rights reserved.
         </div>
         <div class="flex items-center gap-4 text-[11px] text-slate-400">
             <span>SIAKAD & Kemitraan Offline V<?= APP_VERSION ?></span>
@@ -24,7 +24,7 @@ require_once dirname(__DIR__) . '/core/flash.php';
     </footer>
 </div><!-- /main-content-wrapper -->
 </div><!-- /app-container -->
-
+    
 <!-- jQuery CDN -->
 <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
 

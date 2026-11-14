@@ -291,6 +291,82 @@ foreach ($siswaPilihan as $sp) {
     ];
 }
 
+// EKSPOR LAPORAN KEUANGAN & PEMBAYARAN KE EXCEL
+if (isset($_GET['export']) && $_GET['export'] === 'excel') {
+    $stmtCabang = $db->prepare("SELECT * FROM tabel_cabang WHERE id = ?");
+    $stmtCabang->execute([$branchId]);
+    $cabang = $stmtCabang->fetch();
+
+    $columns = [
+        'no'             => ['label' => 'No', 'type' => 'center', 'width' => 45],
+        'kode_transaksi' => ['label' => 'No. Kuitansi / Trx', 'type' => 'text', 'width' => 140],
+        'tanggal_bayar'  => ['label' => 'Tanggal Bayar', 'type' => 'date', 'width' => 110],
+        'nis'            => ['label' => 'NIS', 'type' => 'text', 'width' => 120],
+        'nama_siswa'     => ['label' => 'Nama Siswa', 'type' => 'text', 'width' => 180],
+        'no_hp'          => ['label' => 'No. HP Siswa', 'type' => 'text', 'width' => 130],
+        'nama_layanan'   => ['label' => 'Program Kursus', 'type' => 'text', 'width' => 180],
+        'biaya_kursus'   => ['label' => 'Biaya Program', 'type' => 'currency', 'width' => 130],
+        'jumlah_bayar'   => ['label' => 'Nominal Bayar', 'type' => 'currency', 'width' => 130],
+        'metode'         => ['label' => 'Metode', 'type' => 'center', 'width' => 110],
+        'status'         => ['label' => 'Status Bayar', 'type' => 'badge', 'width' => 110],
+        'kasir'          => ['label' => 'Penerima / Kasir', 'type' => 'center', 'width' => 120],
+        'catatan'        => ['label' => 'Catatan Transaksi', 'type' => 'text', 'width' => 200]
+    ];
+
+    $rows = [];
+    $no = 1;
+    $totalFilteredNominal = 0;
+    foreach ($transaksiList as $t) {
+        $nominal = (float)$t['jumlah_bayar'];
+        $totalFilteredNominal += $nominal;
+
+        $metodeMap = [
+            'tunai'         => 'Tunai (Cash)',
+            'transfer_bank' => 'Transfer Bank',
+            'qris'          => 'QRIS Dinamis'
+        ];
+
+        $rows[] = [
+            'no'             => $no++,
+            'kode_transaksi' => $t['kode_transaksi'],
+            'tanggal_bayar'  => $t['tanggal_bayar'],
+            'nis'            => $t['nis_bisolpin'],
+            'nama_siswa'     => $t['nama_siswa'],
+            'no_hp'          => $t['no_hp_siswa'] ?: '-',
+            'nama_layanan'   => $t['nama_layanan'],
+            'biaya_kursus'   => (float)$t['harga_layanan'],
+            'jumlah_bayar'   => $nominal,
+            'metode'         => $metodeMap[$t['metode_pembayaran']] ?? strtoupper($t['metode_pembayaran']),
+            'status'         => $t['status_pembayaran'],
+            'kasir'          => $t['nama_kasir'] ?: 'Staff',
+            'catatan'        => $t['catatan'] ?: '-'
+        ];
+    }
+
+    $metadata = [
+        'Nama Cabang'        => $cabang['nama_cabang'] ?? 'Bisolpin Cabang',
+        'Kode Cabang'        => $cabang['kode_cabang'] ?? '-',
+        'Filter Status'      => !empty($filterStatus) ? ucfirst($filterStatus) : 'Semua Status',
+        'Filter Metode'      => !empty($filterMetode) ? ucfirst($filterMetode) : 'Semua Metode',
+        'Kata Kunci Cari'    => !empty($search) ? $search : '-',
+        'Total Transaksi'    => count($rows) . ' Transaksi',
+        'Total Kas Diterima' => format_rupiah($totalFilteredNominal),
+        'Waktu Ekspor'       => date('d-m-Y H:i') . ' WITA'
+    ];
+
+    $summary = [
+        'label'   => 'TOTAL KAS DITERIMA',
+        'colspan' => 8,
+        'values'  => [
+            'jumlah_bayar' => $totalFilteredNominal
+        ]
+    ];
+
+    $filename = 'laporan_keuangan_kasir_' . preg_replace('/[^a-zA-Z0-9]/', '_', strtolower($cabang['kode_cabang'] ?? 'cabang')) . '_' . date('Ymd_His');
+
+    export_to_excel($filename, 'LAPORAN PENERIMAAN KAS & PEMBAYARAN SISWA CABANG', $columns, $rows, $metadata, $summary);
+}
+
 require_once dirname(__DIR__, 2) . '/includes/header.php';
 require_once dirname(__DIR__, 2) . '/includes/sidebar.php';
 require_once dirname(__DIR__, 2) . '/includes/topbar.php';
@@ -311,7 +387,11 @@ require_once dirname(__DIR__, 2) . '/includes/topbar.php';
         </p>
     </div>
 
-    <div>
+    <div class="flex flex-wrap items-center gap-2.5">
+        <a href="?status=<?= urlencode($filterStatus) ?>&metode=<?= urlencode($filterMetode) ?>&q=<?= urlencode($search) ?>&export=excel" class="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm shadow-emerald-600/20 flex items-center gap-1.5 transition-all">
+            <i class="fa-solid fa-file-excel text-xs"></i>
+            <span>Ekspor Excel (.xls)</span>
+        </a>
         <button onclick="openModal('modalEntriBayar')" class="btn-brand text-xs py-2.5 shadow-md shadow-brand-500/20">
             <i class="fa-solid fa-plus text-xs"></i>
             <span>Entri Pembayaran Baru</span>

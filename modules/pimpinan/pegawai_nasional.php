@@ -199,6 +199,86 @@ $totalBak      = count(array_filter($pegawaiList, fn($p) => $p['jabatan_role'] =
 $totalMentor   = count(array_filter($pegawaiList, fn($p) => $p['jabatan_role'] === 'mentor'));
 $totalStaffSar = count(array_filter($pegawaiList, fn($p) => in_array($p['jabatan_role'], ['staff', 'sarpras'], true)));
 
+// EKSPOR EXCEL PEGAWAI / MONITORING NASIONAL
+if (isset($_GET['export']) && $_GET['export'] === 'excel') {
+    $mode = $_GET['tab'] ?? 'pegawai';
+    if ($mode === 'ceklok') {
+        $columns = [
+            'no'           => ['label' => 'No', 'type' => 'center', 'width' => 45],
+            'tanggal'      => ['label' => 'Tanggal', 'type' => 'date', 'width' => 110],
+            'cabang'       => ['label' => 'Cabang', 'type' => 'text', 'width' => 170],
+            'nip'          => ['label' => 'NIP', 'type' => 'text', 'width' => 120],
+            'nama_lengkap' => ['label' => 'Nama Pegawai', 'type' => 'text', 'width' => 180],
+            'jabatan_role' => ['label' => 'Peran / Jabatan', 'type' => 'center', 'width' => 120],
+            'jam_masuk'    => ['label' => 'Jam Masuk', 'type' => 'center', 'width' => 90],
+            'jam_keluar'   => ['label' => 'Jam Keluar', 'type' => 'center', 'width' => 90],
+            'status'       => ['label' => 'Status Kehadiran', 'type' => 'badge', 'width' => 120],
+            'jurnal'       => ['label' => 'Jurnal / Keterangan', 'type' => 'text', 'width' => 220]
+        ];
+        $rows = [];
+        $no = 1;
+        foreach ($ceklokNasionalList as $c) {
+            $rows[] = [
+                'no'           => $no++,
+                'tanggal'      => $c['tanggal_absensi'],
+                'cabang'       => ($c['nama_cabang'] ?? 'Pusat') . ' (' . ($c['kode_cabang'] ?? 'PST') . ')',
+                'nip'          => $c['nip_pegawai'],
+                'nama_lengkap' => $c['nama_lengkap'],
+                'jabatan_role' => strtoupper($c['jabatan_role']),
+                'jam_masuk'    => !empty($c['jam_masuk']) ? date('H:i', strtotime($c['jam_masuk'])) : '-',
+                'jam_keluar'   => !empty($c['jam_keluar']) ? date('H:i', strtotime($c['jam_keluar'])) : '-',
+                'status'       => $c['status_kehadiran'],
+                'jurnal'       => $c['keterangan_jurnal'] ?: '-'
+            ];
+        }
+        $metadata = [
+            'Judul'        => 'Monitoring Ceklok Presensi SDM Nasional',
+            'Tanggal'      => format_tanggal_indonesia($filterTanggalAbsen),
+            'Total Catatan'=> count($rows) . ' Presensi',
+            'Waktu Ekspor' => date('d-m-Y H:i') . ' WITA'
+        ];
+        export_to_excel('monitoring_ceklok_nasional_' . str_replace('-', '', $filterTanggalAbsen), 'MONITORING CEKLOK PRESENSI SDM NASIONAL', $columns, $rows, $metadata);
+    } else {
+        $columns = [
+            'no'             => ['label' => 'No', 'type' => 'center', 'width' => 45],
+            'nip'            => ['label' => 'NIP', 'type' => 'text', 'width' => 120],
+            'nama_lengkap'   => ['label' => 'Nama Lengkap', 'type' => 'text', 'width' => 190],
+            'jabatan_role'   => ['label' => 'Jabatan / Peran', 'type' => 'center', 'width' => 120],
+            'cabang'         => ['label' => 'Penempatan Cabang', 'type' => 'text', 'width' => 170],
+            'spesialisasi'   => ['label' => 'Spesialisasi / Keahlian', 'type' => 'text', 'width' => 170],
+            'email'          => ['label' => 'Email', 'type' => 'text', 'width' => 180],
+            'no_hp'          => ['label' => 'No. HP', 'type' => 'text', 'width' => 130],
+            'status_kerja'   => ['label' => 'Status Kepegawaian', 'type' => 'center', 'width' => 130],
+            'status_aktif'   => ['label' => 'Status Akun', 'type' => 'badge', 'width' => 100],
+            'tanggal_masuk'  => ['label' => 'Tgl Bergabung', 'type' => 'date', 'width' => 110]
+        ];
+        $rows = [];
+        $no = 1;
+        foreach ($pegawaiList as $p) {
+            $cabangLabel = !empty($p['nama_cabang']) ? ($p['nama_cabang'] . ' (' . $p['kode_cabang'] . ')') : 'Kantor Pusat / Nasional';
+            $rows[] = [
+                'no'             => $no++,
+                'nip'            => $p['nip_pegawai'],
+                'nama_lengkap'   => $p['nama_lengkap'],
+                'jabatan_role'   => strtoupper($p['jabatan_role']),
+                'cabang'         => $cabangLabel,
+                'spesialisasi'   => $p['spesialisasi_mentor'] ?: ($p['spesialisasi_mapel'] ?? '-'),
+                'email'          => $p['email'] ?: '-',
+                'no_hp'          => $p['no_hp'] ?: ($p['no_telepon'] ?? '-'),
+                'status_kerja'   => ucfirst($p['status_kepegawaian'] ?? 'tetap'),
+                'status_aktif'   => $p['status_aktif'],
+                'tanggal_masuk'  => $p['tanggal_masuk'] ?? date('Y-m-d', strtotime($p['created_at']))
+            ];
+        }
+        $metadata = [
+            'Cakupan'       => 'Seluruh SDM Bisolpin Academy Nasional',
+            'Total Pegawai' => count($rows) . " Orang (BAK: {$totalBak}, Mentor: {$totalMentor}, Staff/Sarpras: {$totalStaffSar})",
+            'Waktu Ekspor'  => date('d-m-Y H:i') . ' WITA'
+        ];
+        export_to_excel('sdm_pegawai_nasional_' . date('Ymd_His'), 'REKAPITULASI DATA SDM & MENTOR NASIONAL', $columns, $rows, $metadata);
+    }
+}
+
 require_once dirname(__DIR__, 2) . '/includes/header.php';
 require_once dirname(__DIR__, 2) . '/includes/sidebar.php';
 require_once dirname(__DIR__, 2) . '/includes/topbar.php';
@@ -217,7 +297,11 @@ require_once dirname(__DIR__, 2) . '/includes/topbar.php';
         </p>
     </div>
 
-    <div class="flex items-center gap-2.5">
+    <div class="flex flex-wrap items-center gap-2.5">
+        <a href="?export=excel" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center gap-1.5 transition-all">
+            <i class="fa-solid fa-file-excel"></i>
+            <span>Ekspor Excel (.xls)</span>
+        </a>
         <button type="button" onclick="openModalTambahBak()" class="btn-brand text-xs py-2 px-4 shadow-sm flex items-center gap-1.5">
             <i class="fa-solid fa-user-graduate text-xs"></i>
             <span>Tambah Akun BAK Pusat</span>

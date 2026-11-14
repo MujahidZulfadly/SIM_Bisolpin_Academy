@@ -177,6 +177,82 @@ $namaBulanIndo = [
 ];
 
 // =============================================================================
+// JIKA MODE EKSPOR EXCEL (.XLS)
+// =============================================================================
+if (isset($_GET['export']) && $_GET['export'] === 'excel') {
+    $columns = [
+        'no'            => ['label' => 'No', 'type' => 'center', 'width' => 45],
+        'tanggal'       => ['label' => 'Tanggal Presensi', 'type' => 'date', 'width' => 110],
+        'hari'          => ['label' => 'Hari', 'type' => 'center', 'width' => 80],
+        'nip'           => ['label' => 'NIP', 'type' => 'text', 'width' => 120],
+        'nama_lengkap'  => ['label' => 'Nama Pegawai', 'type' => 'text', 'width' => 180],
+        'jabatan_role'  => ['label' => 'Peran / Jabatan', 'type' => 'center', 'width' => 100],
+        'spesialisasi'  => ['label' => 'Bidang / Keahlian', 'type' => 'text', 'width' => 140],
+        'jam_masuk'     => ['label' => 'Jam Masuk', 'type' => 'center', 'width' => 90],
+        'jam_keluar'    => ['label' => 'Jam Keluar', 'type' => 'center', 'width' => 90],
+        'durasi'        => ['label' => 'Durasi Kerja', 'type' => 'center', 'width' => 100],
+        'status'        => ['label' => 'Status Kehadiran', 'type' => 'badge', 'width' => 110],
+        'jurnal'        => ['label' => 'Jurnal / Keterangan', 'type' => 'text', 'width' => 220],
+        'diinput_oleh'  => ['label' => 'Dicatat Oleh', 'type' => 'center', 'width' => 110]
+    ];
+
+    $rows = [];
+    $no = 1;
+    foreach ($rekapList as $r) {
+        $durasiStr = '-';
+        if (!empty($r['jam_masuk']) && !empty($r['jam_keluar'])) {
+            $tIn = strtotime($r['jam_masuk']);
+            $tOut = strtotime($r['jam_keluar']);
+            if ($tOut > $tIn) {
+                $diff = $tOut - $tIn;
+                $jam = floor($diff / 3600);
+                $menit = floor(($diff % 3600) / 60);
+                $durasiStr = "{$jam} jam {$menit} mnt";
+            }
+        }
+
+        $jabatanLabel = strtoupper($r['jabatan_role']);
+        $spesialisasi = '-';
+        if ($r['jabatan_role'] === 'mentor') {
+            $spesialisasi = $r['spesialisasi_mentor'] ?? 'Umum';
+        } elseif ($r['jabatan_role'] === 'sarpras') {
+            $spesialisasi = 'Teknisi Lab & Aset';
+        } elseif ($r['jabatan_role'] === 'staff') {
+            $spesialisasi = 'Front Office & Kasir';
+        }
+
+        $rows[] = [
+            'no'           => $no++,
+            'tanggal'      => $r['tanggal_absensi'],
+            'hari'         => format_hari_indonesia($r['tanggal_absensi']),
+            'nip'          => $r['nip_pegawai'],
+            'nama_lengkap' => $r['nama_lengkap'],
+            'jabatan_role' => $jabatanLabel,
+            'spesialisasi' => $spesialisasi,
+            'jam_masuk'    => !empty($r['jam_masuk']) ? date('H:i', strtotime($r['jam_masuk'])) : '-',
+            'jam_keluar'   => !empty($r['jam_keluar']) ? date('H:i', strtotime($r['jam_keluar'])) : '-',
+            'durasi'       => $durasiStr,
+            'status'       => $r['status_kehadiran'],
+            'jurnal'       => $r['keterangan_jurnal'] ?: '-',
+            'diinput_oleh' => $r['inputer_username'] ?: 'Sistem (Ceklok)'
+        ];
+    }
+
+    $metadata = [
+        'Nama Cabang'      => $cabang['nama_cabang'] ?? 'Bisolpin Cabang',
+        'Kode Cabang'      => $cabang['kode_cabang'] ?? '-',
+        'Periode Rekap'    => ($namaBulanIndo[$filterBulan] ?? '') . ' ' . $filterTahun,
+        'Direktur Cabang'  => $namaDirektur,
+        'Total Presensi'   => "{$totalCatatan} Catatan (Hadir: {$countHadir}, Izin: {$countIzin}, Sakit: {$countSakit}, Alfa: {$countAlfa})",
+        'Waktu Ekspor'     => date('d-m-Y H:i') . ' WITA'
+    ];
+
+    $filename = 'rekap_presensi_' . preg_replace('/[^a-zA-Z0-9]/', '_', strtolower($cabang['kode_cabang'] ?? 'cabang')) . '_' . strtolower($namaBulanIndo[$filterBulan] ?? 'bulan') . '_' . $filterTahun;
+
+    export_to_excel($filename, 'REKAPITULASI PRESENSI SDM (STAFF, MENTOR, SARPRAS)', $columns, $rows, $metadata);
+}
+
+// =============================================================================
 // JIKA MODE CETAK LAPORAN RESMI (PRINT FORMAT KE DIREKTUR CABANG)
 // =============================================================================
 if ($isPrintMode):
@@ -208,6 +284,10 @@ if ($isPrintMode):
             <button onclick="window.print()" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm">
                 <span>Cetak / Simpan PDF</span>
             </button>
+            <a href="<?= base_url('modules/staff/rekap_absensi.php?bulan=' . $filterBulan . '&tahun=' . $filterTahun . '&pegawai_id=' . $filterPegawai . '&status=' . urlencode($filterStatus) . '&export=excel') ?>" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                <i class="fa-solid fa-file-excel"></i>
+                <span>Unduh Excel (.xls)</span>
+            </a>
             <a href="<?= base_url('modules/staff/rekap_absensi.php?bulan=' . $filterBulan . '&tahun=' . $filterTahun) ?>" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold">
                 Kembali ke Aplikasi
             </a>
@@ -370,11 +450,15 @@ require_once dirname(__DIR__, 2) . '/includes/topbar.php';
         </p>
     </div>
 
-    <div class="flex items-center gap-2.5">
+    <div class="flex flex-wrap items-center gap-2.5">
         <button type="button" onclick="openModal('modalInputPresensi')" class="btn-brand text-xs py-2 px-3.5 shadow-sm shadow-brand-500/20">
             <i class="fa-solid fa-plus text-xs mr-1"></i>
             <span>Input Presensi Manual</span>
         </button>
+        <a href="?bulan=<?= $filterBulan ?>&tahun=<?= $filterTahun ?>&pegawai_id=<?= $filterPegawai ?>&status=<?= e($filterStatus) ?>&export=excel" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm shadow-emerald-600/20 flex items-center gap-1.5 transition-all">
+            <i class="fa-solid fa-file-excel text-xs"></i>
+            <span>Ekspor Excel (.xls)</span>
+        </a>
         <a href="?bulan=<?= $filterBulan ?>&tahun=<?= $filterTahun ?>&pegawai_id=<?= $filterPegawai ?>&status=<?= e($filterStatus) ?>&print=1" target="_blank" class="btn-brand-outline text-xs py-2 px-3.5 bg-white shadow-sm flex items-center gap-1.5 font-bold">
             <i class="fa-solid fa-print text-xs"></i>
             <span>Cetak Laporan untuk Direktur</span>
